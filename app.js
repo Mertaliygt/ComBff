@@ -15,7 +15,12 @@ import {
     query, 
     where, 
     getDocs, 
-    updateDoc 
+    updateDoc,
+    addDoc,
+    orderBy,
+    onSnapshot,
+    serverTimestamp,
+    deleteDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -32,7 +37,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// --- DOM ELEMENTLERİ ---
+// DOM Elementleri
 const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const authBtn = document.getElementById('auth-btn');
@@ -52,48 +57,84 @@ const openModPanelBtn = document.getElementById('open-mod-panel-btn');
 const closeModPanelBtn = document.getElementById('close-mod-panel-btn');
 const modModal = document.getElementById('mod-modal');
 const pendingUsersContainer = document.getElementById('pending-users-container');
+const reportsContainer = document.getElementById('reports-container');
+const modGroupsContainer = document.getElementById('mod-groups-container');
 
-// Profil Alanları
+const modTabApprovals = document.getElementById('mod-tab-approvals');
+const modTabReports = document.getElementById('mod-tab-reports');
+const modTabGroups = document.getElementById('mod-tab-groups');
+
 const profileName = document.getElementById('profile-name');
 const profileEmail = document.getElementById('profile-email');
 const profileBio = document.getElementById('profile-bio');
 
+// Grup & Chat Elementleri
+const groupsContainer = document.getElementById('groups-container');
+const openCreateGroupModalBtn = document.getElementById('open-create-group-modal');
+const createGroupModal = document.getElementById('create-group-modal');
+const submitCreateGroupBtn = document.getElementById('submit-create-group');
+const cancelCreateGroupBtn = document.getElementById('cancel-create-group');
+const newGroupTitle = document.getElementById('new-group-title');
+const newGroupCategory = document.getElementById('new-group-category');
+const newGroupDesc = document.getElementById('new-group-desc');
+
+const chatMessagesContainer = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const chatSendBtn = document.getElementById('chat-send-btn');
+const backToGroupsBtn = document.getElementById('back-to-groups-btn');
+const chatGroupTitle = document.getElementById('chat-group-title');
+const chatStatusBadge = document.getElementById('chat-status-badge');
+const chatInputArea = document.getElementById('chat-input-area');
+
+const reportModal = document.getElementById('report-modal');
+const reportReasonSelect = document.getElementById('report-reason');
+const submitReportBtn = document.getElementById('submit-report-btn');
+const cancelReportBtn = document.getElementById('cancel-report-btn');
+
 let isRegisterMode = false;
 let mapInstance = null;
+let currentActiveGroupId = null;
+let currentChatUnsubscribe = null;
+let reportedMessageData = null;
+let currentUserRole = "user";
+
+// Sansür Filtresi
+const BAD_WORDS = ["küfür", "mal", "aptal", "salak"];
+function filterBadWords(text) {
+    let cleanedText = text;
+    BAD_WORDS.forEach(word => {
+        const regex = new RegExp(word, 'gi');
+        cleanedText = cleanedText.replace(regex, '***');
+    });
+    return cleanedText;
+}
 
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
 }
 
-// --- SEKME (TAB) GEÇİŞLERİ ---
-const tabButtons = document.querySelectorAll('.tab-btn');
-tabButtons.forEach(btn => {
+// Sekme Geçişleri
+document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const targetViewId = btn.getAttribute('data-target');
-
-        // Sekme görünümlerini değiştir
         document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
         document.getElementById(targetViewId).classList.add('active');
 
-        // Buton renklerini güncelle
-        tabButtons.forEach(b => {
+        document.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('text-indigo-400');
             b.classList.add('text-slate-400');
         });
         btn.classList.remove('text-slate-400');
         btn.classList.add('text-indigo-400');
 
-        // Eğer Harita sekmesine tıklandıysa ve harita henüz yüklenmediyse başlat
         if (targetViewId === 'view-map') {
-            setTimeout(() => {
-                initMap();
-            }, 100);
+            setTimeout(() => { initMap(); }, 100);
         }
     });
 });
 
-// --- GİRİŞ / KAYIT MODU ---
+// Giriş / Kayıt Modu Değiştirme
 toggleModeBtn.addEventListener('click', () => {
     isRegisterMode = !isRegisterMode;
     if (isRegisterMode) {
@@ -109,15 +150,10 @@ toggleModeBtn.addEventListener('click', () => {
     }
 });
 
-// --- AUTH İŞLEMLERİ ---
 authBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value.trim();
-
-    if (!email || !password) {
-        alert("Lütfen e-posta ve şifre alanlarını doldurun.");
-        return;
-    }
+    if (!email || !password) return alert("E-posta ve şifre zorunludur.");
 
     if (isRegisterMode) {
         const fullName = fullNameInput.value.trim();
@@ -125,74 +161,62 @@ authBtn.addEventListener('click', async () => {
         const gender = genderSelect.value;
         const bio = bioInput.value.trim();
 
-        if (!fullName || !age || !gender || !bio) {
-            alert("Lütfen tüm kayıt bilgilerini eksiksiz doldurun.");
-            return;
-        }
-
-        if (age < 18) {
-            alert("Üzgünüz, uygulama 18 yaş ve üzeri kullanıcılar içindir.");
-            return;
-        }
+        if (!fullName || !age || !gender || !bio) return alert("Lütfen tüm alanları doldurun.");
+        if (age < 18) return alert("18 yaşından küçükler kayıt olamaz.");
 
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            await setDoc(doc(db, "users", user.uid), {
-                uid: user.uid,
-                email: email,
-                fullName: fullName,
-                age: age,
-                gender: gender,
-                bio: bio,
-                role: "user", 
-                status: 0,
-                createdAt: new Date()
+            await setDoc(doc(db, "users", userCredential.user.uid), {
+                uid: userCredential.user.uid,
+                email, fullName, age, gender, bio,
+                role: "user", status: 0, banned: false, createdAt: new Date()
             });
-
-            alert("Kayıt başarılı! Hesabınız moderatör onayına iletildi.");
+            alert("Kayıt başarılı! Onaya gönderildi.");
         } catch (error) {
-            alert("Kayıt hatası: " + error.message);
+            alert("Hata: " + error.message);
         }
     } else {
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+            if (userDoc.exists() && userDoc.data().banned) {
+                alert("Hesabınız banlanmıştır.");
+                await signOut(auth);
+            }
         } catch (error) {
             alert("Giriş hatası: " + error.message);
         }
     }
 });
 
-// --- ROUTER GUARD & PROFİL YÜKLEME ---
 onAuthStateChanged(auth, async (user) => {
     if (user) {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
-
+        const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
             const userData = userDoc.data();
-            const role = userData.role ? String(userData.role).trim().toLowerCase() : "user";
+            if (userData.banned) {
+                await signOut(auth);
+                return;
+            }
+            currentUserRole = userData.role ? String(userData.role).trim().toLowerCase() : "user";
             const status = userData.status;
 
             if (status === 0) {
                 showScreen('pending-screen');
             } else if (status === 1) {
                 showScreen('main-screen');
-
-                // Profil bilgilerini doldur
                 profileName.textContent = `${userData.fullName} (${userData.age})`;
                 profileEmail.textContent = userData.email;
-                profileBio.textContent = userData.bio || "Henüz biyografi eklenmemiş.";
+                profileBio.textContent = userData.bio || "Biyografi yok.";
 
-                // Admin veya moderatörse Mod Paneli butonunu göster
-                if (role === "admin" || role === "moderator") {
+                if (currentUserRole === "admin" || currentUserRole === "moderator") {
                     openModPanelBtn.classList.remove('hidden');
                 } else {
                     openModPanelBtn.classList.add('hidden');
                 }
+                loadGroups();
             } else {
-                alert("Hesabınız reddedilmiştir.");
+                alert("Hesabınız reddedildi.");
                 await signOut(auth);
             }
         } else {
@@ -203,7 +227,203 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- MODAL İŞLEMLERİ ---
+// --- DİNAMİK GRUP & ETKİNLİK SİSTEMİ ---
+openCreateGroupModalBtn.addEventListener('click', () => createGroupModal.classList.remove('hidden'));
+cancelCreateGroupBtn.addEventListener('click', () => createGroupModal.classList.add('hidden'));
+
+submitCreateGroupBtn.addEventListener('click', async () => {
+    const title = newGroupTitle.value.trim();
+    const category = newGroupCategory.value.trim();
+    const desc = newGroupDesc.value.trim();
+
+    if (!title || !category || !desc) return alert("Lütfen tüm alanları doldurun.");
+
+    try {
+        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        const creatorName = userDoc.exists() ? userDoc.data().fullName : "Anonim";
+
+        await addDoc(collection(db, "groups"), {
+            title,
+            category,
+            desc,
+            creatorUid: auth.currentUser.uid,
+            creatorName,
+            status: "Açık", // Açık veya Kapalı
+            createdAt: serverTimestamp()
+        });
+
+        newGroupTitle.value = '';
+        newGroupCategory.value = '';
+        newGroupDesc.value = '';
+        createGroupModal.classList.add('hidden');
+        loadGroups();
+    } catch (error) {
+        alert("Grup oluşturulamadı: " + error.message);
+    }
+});
+
+// Grupları Listele
+function loadGroups() {
+    groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Gruplar yükleniyor...</p>';
+    
+    onSnapshot(collection(db, "groups"), (snapshot) => {
+        groupsContainer.innerHTML = '';
+        if (snapshot.empty) {
+            groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Henüz etkinlik grubu açılmamış. İlkini sen kur!</p>';
+            return;
+        }
+
+        snapshot.forEach((docSnap) => {
+            const gData = docSnap.data();
+            const gId = docSnap.id;
+            const isOpen = gData.status !== "Kapalı";
+
+            const card = document.createElement('div');
+            card.className = "bg-slate-800/50 border border-slate-800 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h4 class="font-bold text-indigo-300 text-xs">${gData.title}</h4>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${gData.category} • Kurucu: ${gData.creatorName}</p>
+                    </div>
+                    <span class="text-[9px] ${isOpen ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border-rose-500/30'} px-2 py-0.5 rounded-full border">${gData.status}</span>
+                </div>
+                <p class="text-[11px] text-slate-300 leading-relaxed">${gData.desc}</p>
+                <div class="flex justify-end pt-1">
+                    <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition shadow-sm">Sohbete Katıl</button>
+                </div>
+            `;
+            groupsContainer.appendChild(card);
+        });
+    });
+}
+
+// Chat Ekranına Geçiş
+window.openGroupChat = function(groupId, groupTitle, groupStatus) {
+    currentActiveGroupId = groupId;
+    chatGroupTitle.textContent = groupTitle;
+    
+    const isOpen = groupStatus !== "Kapalı";
+    if (isOpen) {
+        chatStatusBadge.textContent = "Açık";
+        chatStatusBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30";
+        chatInputArea.classList.remove('hidden');
+    } else {
+        chatStatusBadge.textContent = "Kapalı (Arşiv)";
+        chatStatusBadge.className = "text-[10px] bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/30";
+        chatInputArea.classList.add('hidden');
+    }
+
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-chat').classList.add('active');
+
+    loadChatMessages(groupId);
+};
+
+backToGroupsBtn.addEventListener('click', () => {
+    if (currentChatUnsubscribe) currentChatUnsubscribe();
+    document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-groups').classList.add('active');
+});
+
+// Sohbet Mesajları
+function loadChatMessages(groupId) {
+    chatMessagesContainer.innerHTML = '';
+    if (currentChatUnsubscribe) currentChatUnsubscribe();
+
+    const q = query(collection(db, "groups", groupId, "messages"), orderBy("createdAt", "asc"));
+    
+    currentChatUnsubscribe = onSnapshot(q, (snapshot) => {
+        chatMessagesContainer.innerHTML = '';
+        if (snapshot.empty) {
+            chatMessagesContainer.innerHTML = '<p class="text-center text-[11px] text-slate-500 mt-4">Henüz mesaj yok. İlk mesajı sen yaz!</p>';
+            return;
+        }
+
+        snapshot.forEach((docSnap) => {
+            const msgData = docSnap.data();
+            const msgId = docSnap.id;
+            const isMe = msgData.senderUid === auth.currentUser.uid;
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+            msgDiv.innerHTML = `
+                <div class="max-w-[75%] bg-slate-800 border border-slate-700/60 rounded-2xl px-3 py-2 text-xs text-slate-200 shadow-sm relative group">
+                    <span class="block text-[10px] font-bold text-indigo-400 mb-0.5">${msgData.senderName}</span>
+                    <p class="leading-relaxed">${msgData.text}</p>
+                    <div class="flex justify-end items-center space-x-2 mt-1">
+                        <span class="text-[9px] text-slate-500">${msgData.createdAt ? new Date(msgData.createdAt.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}</span>
+                        <button class="open-report-modal text-[9px] text-rose-400 hover:underline opacity-60 hover:opacity-100 transition" data-id="${msgId}" data-text="${msgData.text}" data-sender="${msgData.senderName}">Şikayet Et</button>
+                    </div>
+                </div>
+            `;
+            chatMessagesContainer.appendChild(msgDiv);
+        });
+
+        chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+
+        document.querySelectorAll('.open-report-modal').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                reportedMessageData = {
+                    messageId: e.target.getAttribute('data-id'),
+                    messageText: e.target.getAttribute('data-text'),
+                    senderName: e.target.getAttribute('data-sender'),
+                    groupId: currentActiveGroupId
+                };
+                reportModal.classList.remove('hidden');
+            });
+        });
+    });
+}
+
+chatSendBtn.addEventListener('click', async () => {
+    const text = chatInput.value.trim();
+    if (!text || !currentActiveGroupId) return;
+
+    const filteredText = filterBadWords(text);
+    try {
+        const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+        const senderName = userDoc.exists() ? userDoc.data().fullName : "Kullanıcı";
+
+        await addDoc(collection(db, "groups", currentActiveGroupId, "messages"), {
+            text: filteredText,
+            senderUid: auth.currentUser.uid,
+            senderName,
+            createdAt: serverTimestamp()
+        });
+        chatInput.value = '';
+    } catch (error) {
+        alert("Mesaj gönderilemedi: " + error.message);
+    }
+});
+
+// Raporlama
+cancelReportBtn.addEventListener('click', () => {
+    reportModal.classList.add('hidden');
+    reportedMessageData = null;
+});
+
+submitReportBtn.addEventListener('click', async () => {
+    if (!reportedMessageData) return;
+    try {
+        await addDoc(collection(db, "reports"), {
+            messageId: reportedMessageData.messageId,
+            messageText: reportedMessageData.messageText,
+            senderName: reportedMessageData.senderName,
+            groupId: reportedMessageData.groupId,
+            reason: reportReasonSelect.value,
+            reportedBy: auth.currentUser.uid,
+            createdAt: serverTimestamp()
+        });
+        alert("Bildirim moderatöre iletildi.");
+        reportModal.classList.add('hidden');
+        reportedMessageData = null;
+    } catch (error) {
+        alert("Hata: " + error.message);
+    }
+});
+
+// Moderatör Paneli
 openModPanelBtn.addEventListener('click', () => {
     modModal.classList.remove('hidden');
     modModal.classList.add('flex');
@@ -215,86 +435,137 @@ closeModPanelBtn.addEventListener('click', () => {
     modModal.classList.add('hidden');
 });
 
-// --- BEKLEYENLERİ LİSTELEME ---
+modTabApprovals.addEventListener('click', () => {
+    modTabApprovals.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
+    modTabReports.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    modTabGroups.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    pendingUsersContainer.classList.remove('hidden');
+    reportsContainer.classList.add('hidden');
+    modGroupsContainer.classList.add('hidden');
+    loadPendingUsers();
+});
+
+modTabReports.addEventListener('click', () => {
+    modTabReports.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
+    modTabApprovals.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    modTabGroups.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    reportsContainer.classList.remove('hidden');
+    pendingUsersContainer.classList.add('hidden');
+    modGroupsContainer.classList.add('hidden');
+    loadReports();
+});
+
+modTabGroups.addEventListener('click', () => {
+    modTabGroups.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
+    modTabApprovals.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    modTabReports.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    modGroupsContainer.classList.remove('hidden');
+    pendingUsersContainer.classList.add('hidden');
+    reportsContainer.classList.add('hidden');
+    loadModGroups();
+});
+
 async function loadPendingUsers() {
     pendingUsersContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Yükleniyor...</p>';
-    
-    try {
-        const q = query(collection(db, "users"), where("status", "==", 0));
-        const querySnapshot = await getDocs(q);
-
-        if (querySnapshot.empty) {
-            pendingUsersContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Onay bekleyen kimse yok.</p>';
-            return;
-        }
-
-        pendingUsersContainer.innerHTML = '';
-        querySnapshot.forEach((documentSnapshot) => {
-            const uData = documentSnapshot.data();
-            
-            const card = document.createElement('div');
-            card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2 shadow-md";
-            card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h4 class="font-bold text-slate-200 text-xs">${uData.fullName} (${uData.age}) - <span class="text-indigo-400">${uData.gender}</span></h4>
-                        <p class="text-[10px] text-slate-400">${uData.email}</p>
-                    </div>
-                    <span class="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">Bekliyor</span>
-                </div>
-                <p class="text-[11px] text-slate-300 bg-slate-900/60 p-2 rounded-lg italic leading-relaxed">"${uData.bio}"</p>
-                <div class="flex space-x-2 pt-1">
-                    <button data-id="${uData.uid}" class="approve-btn flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold py-1.5 rounded-lg transition">Onayla</button>
-                    <button data-id="${uData.uid}" class="reject-btn px-3 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-[11px] font-semibold py-1.5 rounded-lg transition border border-rose-500/30">Reddet</button>
-                </div>
-            `;
-            pendingUsersContainer.appendChild(card);
-        });
-
-        document.querySelectorAll('.approve-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const targetUid = e.target.getAttribute('data-id');
-                await updateUserStatus(targetUid, 1);
-            });
-        });
-
-        document.querySelectorAll('.reject-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const targetUid = e.target.getAttribute('data-id');
-                await updateUserStatus(targetUid, -1);
-            });
-        });
-
-    } catch (error) {
-        console.error("Hata:", error);
-        pendingUsersContainer.innerHTML = '<p class="text-center text-xs text-rose-400">Yüklenirken hata oluştu.</p>';
+    const querySnapshot = await getDocs(query(collection(db, "users"), where("status", "==", 0)));
+    if (querySnapshot.empty) {
+        pendingUsersContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Onay bekleyen kimse yok.</p>';
+        return;
     }
+    pendingUsersContainer.innerHTML = '';
+    querySnapshot.forEach((docSnap) => {
+        const uData = docSnap.data();
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2";
+        card.innerHTML = `
+            <h4 class="font-bold text-slate-200 text-xs">${uData.fullName} (${uData.age})</h4>
+            <p class="text-[11px] text-slate-300 italic">"${uData.bio}"</p>
+            <div class="flex space-x-2 pt-1">
+                <button data-id="${uData.uid}" class="approve-btn flex-1 bg-emerald-600 text-white text-[11px] py-1.5 rounded-lg">Onayla</button>
+                <button data-id="${uData.uid}" class="reject-btn px-3 bg-rose-600/20 text-rose-400 text-[11px] py-1.5 rounded-lg border border-rose-500/30">Reddet</button>
+            </div>
+        `;
+        pendingUsersContainer.appendChild(card);
+    });
+
+    document.querySelectorAll('.approve-btn').forEach(b => b.addEventListener('click', async (e) => {
+        await updateDoc(doc(db, "users", e.target.getAttribute('data-id')), { status: 1 });
+        loadPendingUsers();
+    }));
+    document.querySelectorAll('.reject-btn').forEach(b => b.addEventListener('click', async (e) => {
+        await updateDoc(doc(db, "users", e.target.getAttribute('data-id')), { status: -1 });
+        loadPendingUsers();
+    }));
 }
 
-async function updateUserStatus(uid, newStatus) {
-    try {
-        const userRef = doc(db, "users", uid);
-        await updateDoc(userRef, { status: newStatus });
-        alert(newStatus === 1 ? "Kullanıcı onaylandı!" : "Kullanıcı reddedildi.");
-        loadPendingUsers();
-    } catch (error) {
-        alert("İşlem başarısız: " + error.message);
+async function loadReports() {
+    reportsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Yükleniyor...</p>';
+    const querySnapshot = await getDocs(collection(db, "reports"));
+    if (querySnapshot.empty) {
+        reportsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Şikayet edilen içerik yok.</p>';
+        return;
     }
+    reportsContainer.innerHTML = '';
+    querySnapshot.forEach((docSnap) => {
+        const rData = docSnap.data();
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2";
+        card.innerHTML = `
+            <h4 class="font-bold text-rose-400 text-xs">Sebep: ${rData.reason}</h4>
+            <p class="text-[11px] text-slate-300 italic">"${rData.messageText}"</p>
+            <button data-report-id="${docSnap.id}" class="delete-report-btn bg-slate-700 text-slate-200 text-[11px] py-1.5 rounded-lg">Raporu Kaldır</button>
+        `;
+        reportsContainer.appendChild(card);
+    });
+
+    document.querySelectorAll('.delete-report-btn').forEach(b => b.addEventListener('click', async (e) => {
+        await deleteDoc(doc(db, "reports", e.target.getAttribute('data-report-id')));
+        loadReports();
+    }));
+}
+
+async function loadModGroups() {
+    modGroupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Yükleniyor...</p>';
+    const querySnapshot = await getDocs(collection(db, "groups"));
+    if (querySnapshot.empty) {
+        modGroupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Grup bulunamadı.</p>';
+        return;
+    }
+    modGroupsContainer.innerHTML = '';
+    querySnapshot.forEach((docSnap) => {
+        const gData = docSnap.data();
+        const isOpen = gData.status !== "Kapalı";
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2";
+        card.innerHTML = `
+            <h4 class="font-bold text-indigo-300 text-xs">${gData.title} (${gData.status})</h4>
+            <button data-id="${docSnap.id}" data-status="${isOpen ? 'Kapalı' : 'Açık'}" class="toggle-group-status py-1.5 text-white text-[11px] rounded-lg ${isOpen ? 'bg-rose-600' : 'bg-emerald-600'}">
+                ${isOpen ? 'Grubu / Chati Kapat' : 'Grubu Aç'}
+            </button>
+        `;
+        modGroupsContainer.classList.remove('hidden');
+        modGroupsContainer.appendChild(card);
+    });
+
+    document.querySelectorAll('.toggle-group-status').forEach(b => {
+        b.addEventListener('click', async (e) => {
+            const gid = e.target.getAttribute('data-id');
+            const newStatus = e.target.getAttribute('data-status');
+            await updateDoc(doc(db, "groups", gid), { status: newStatus });
+            loadModGroups();
+        });
+    });
 }
 
 logoutBtnPending.addEventListener('click', () => signOut(auth));
 logoutBtnMain.addEventListener('click', () => signOut(auth));
 
-// --- HARİTA BAŞLATMA ---
 function initMap() {
     if (mapInstance) {
         mapInstance.invalidateSize();
         return;
     }
     mapInstance = L.map('map').setView([40.9923, 29.0294], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(mapInstance);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
     setTimeout(() => { mapInstance.invalidateSize(); }, 200);
 }
