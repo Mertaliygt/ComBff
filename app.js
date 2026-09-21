@@ -71,6 +71,7 @@ const profileBio = document.getElementById('profile-bio');
 // Grup, Takvim & Chat Elementleri
 const groupsContainer = document.getElementById('groups-container');
 const calendarContainer = document.getElementById('calendar-container');
+const sortByDistanceBtn = document.getElementById('sort-by-distance-btn');
 const openCreateGroupModalBtn = document.getElementById('open-create-group-modal');
 const createGroupModal = document.getElementById('create-group-modal');
 const submitCreateGroupBtn = document.getElementById('submit-create-group');
@@ -104,6 +105,10 @@ let currentActiveGroupId = null;
 let currentChatUnsubscribe = null;
 let reportedMessageData = null;
 let currentUserRole = "user";
+let globalGroupsCache = []; // Sıralama için grupları hafızada tutacağız
+let isSortedByDistance = false;
+let userCurrentLat = null;
+let userCurrentLng = null;
 
 // Sansür Filtresi
 const BAD_WORDS = ["küfür", "mal", "aptal", "salak"];
@@ -114,6 +119,19 @@ function filterBadWords(text) {
         cleanedText = cleanedText.replace(regex, '***');
     });
     return cleanedText;
+}
+
+// Haversine Formülü (İki koordinat arası kilometre hesaplama)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Dünya yarıçapı (km)
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Mesafe (KM)
 }
 
 function showScreen(screenId) {
@@ -234,7 +252,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- DİNAMİK GRUP & TAKVİM SİSTEMİ ---
+// --- DİNAMİK GRUP & YAKINDAN UZAĞA SIRALAMA SİSTEMİ ---
 openCreateGroupModalBtn.addEventListener('click', () => {
     createGroupModal.classList.remove('hidden');
     setTimeout(() => { initMiniMap(); }, 200);
@@ -279,15 +297,33 @@ submitCreateGroupBtn.addEventListener('click', async () => {
     }
 });
 
-// Grupları, Harita Pinlerini ve Takvimi Yükleme
+// Yakınımdakiler Butonu Dinleyicisi
+sortByDistanceBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+        return alert("Tarayıcınız konum özelliğini desteklemiyor.");
+    }
+
+    sortByDistanceBtn.textContent = "📍 Konum Alınıyor...";
+    navigator.geolocation.getCurrentPosition((position) => {
+        userCurrentLat = position.coords.latitude;
+        userCurrentLng = position.coords.longitude;
+        isSortedByDistance = true;
+
+        sortByDistanceBtn.textContent = "📍 Yakına Göre Sıralı (Sıfırla)";
+        renderGroups();
+    }, (error) => {
+        alert("Konum alınamadı. Lütfen konum izinlerini kontrol edin.");
+        sortByDistanceBtn.textContent = "📍 Yakınımdakiler (En Yakın)";
+    }, { enableHighAccuracy: true });
+});
+
+// Grupları Veritabanından Dinleme ve Cacheleme
 function loadGroups() {
     groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Gruplar yükleniyor...</p>';
     calendarContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Takvim yükleniyor...</p>';
     
     onSnapshot(collection(db, "groups"), (snapshot) => {
-        groupsContainer.innerHTML = '';
-        calendarContainer.innerHTML = '';
-        
+        globalGroupsCache = [];
         markerList.forEach(m => {
             if (mapInstance) mapInstance.removeLayer(m);
         });
@@ -299,68 +335,116 @@ function loadGroups() {
             return;
         }
 
-        let futureEventsCount = 0;
-        const now = new Date();
-
         snapshot.forEach((docSnap) => {
-            const gData = docSnap.data();
-            const gId = docSnap.id;
-            const isOpen = gData.status !== "Kapalı";
-            const formattedDate = gData.eventDate ? new Date(gData.eventDate).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belirtilmedi';
-
-            // 1. Ana Grup Kartı HTML'i
-            const cardHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h4 class="font-bold text-indigo-300 text-xs">${gData.title}</h4>
-                        <p class="text-[10px] text-slate-400 mt-0.5">${gData.category} • Kurucu: ${gData.creatorName}</p>
-                    </div>
-                    <span class="text-[9px] ${isOpen ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border-rose-500/30'} px-2 py-0.5 rounded-full border">${gData.status}</span>
-                </div>
-                <p class="text-[11px] text-slate-300 leading-relaxed">${gData.desc}</p>
-                <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-700/40">
-                    <span>📅 ${formattedDate}</span>
-                    <span>👤 ${gData.memberCount || 1} Katılımcı</span>
-                </div>
-                <div class="flex justify-end pt-1">
-                    <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition shadow-sm">Sohbete Katıl</button>
-                </div>
-            `;
-
-            // Listeye Ekle
-            const card = document.createElement('div');
-            card.className = "bg-slate-800/50 border border-slate-800 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
-            card.innerHTML = cardHTML;
-            groupsContainer.appendChild(card);
-
-            // Gelecek Zamanlı Etkinlik Kontrolü ve Takvime Ekleme
-            if (gData.eventDate && new Date(gData.eventDate) > now) {
-                futureEventsCount++;
-                const calCard = document.createElement('div');
-                calCard.className = "bg-slate-800/50 border border-indigo-500/30 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
-                calCard.innerHTML = cardHTML;
-                calendarContainer.appendChild(calCard);
-            }
-
-            // Harita Pinleri
-            if (mapInstance && gData.latitude && gData.longitude) {
-                const marker = L.marker([gData.latitude, gData.longitude]).addTo(mapInstance);
-                marker.bindPopup(`
-                    <div style="font-family:sans-serif; color:#0f172a; min-width:160px;">
-                        <h4 style="font-weight:bold; font-size:13px; margin-bottom:2px; color:#4f46e5;">${gData.title}</h4>
-                        <p style="font-size:10px; color:#475569; margin-bottom:4px;">📅 ${formattedDate}</p>
-                        <p style="font-size:11px; margin-bottom:6px; color:#334155;">${gData.desc}</p>
-                        <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" style="background:#4f46e5; color:#fff; border:none; padding:4px 8px; font-size:10px; border-radius:6px; cursor:pointer; width:100%;">Sohbete Git</button>
-                    </div>
-                `);
-                markerList.push(marker);
-            }
+            globalGroupsCache.push({ id: docSnap.id, ...docSnap.data() });
         });
 
-        if (futureEventsCount === 0) {
-            calendarContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Şu an planlanmış gelecek zamanlı etkinlik bulunmuyor.</p>';
+        renderGroups();
+    });
+}
+
+// Grupları Ekrana Basma ve Mesafe Sıralama Mantığı
+function renderGroups() {
+    groupsContainer.innerHTML = '';
+    calendarContainer.innerHTML = '';
+
+    let groupsToRender = [...globalGroupsCache];
+
+    // Eğer yakına göre sıralama aktifse ve kullanıcı konumu varsa mesafeye göre sırala
+    if (isSortedByDistance && userCurrentLat !== null && userCurrentLng !== null) {
+        groupsToRender.sort((a, b) => {
+            const distA = calculateDistance(userCurrentLat, userCurrentLng, a.latitude || 0, a.longitude || 0);
+            const distB = calculateDistance(userCurrentLat, userCurrentLng, b.latitude || 0, b.longitude || 0);
+            return distA - distB; // En yakından en uzağa
+        });
+    }
+
+    let futureEventsCount = 0;
+    const now = new Date();
+
+    groupsToRender.forEach((gData) => {
+        const gId = gData.id;
+        const isOpen = gData.status !== "Kapalı";
+        const formattedDate = gData.eventDate ? new Date(gData.eventDate).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belirtilmedi';
+
+        // Mesafe yazısı (Eğer konum alındıysa)
+        let distanceText = "";
+        if (userCurrentLat !== null && userCurrentLng !== null && gData.latitude && gData.longitude) {
+            const distKm = calculateDistance(userCurrentLat, userCurrentLng, gData.latitude, gData.longitude);
+            distanceText = `• 📍 ${distKm < 1 ? Math.round(distKm * 1000) + ' m' : distKm.toFixed(1) + ' km'}`;
+        }
+
+        // 1. Ana Grup Kartı
+        const card = document.createElement('div');
+        card.className = "bg-slate-800/50 border border-slate-800 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div>
+                    <h4 class="font-bold text-indigo-300 text-xs">${gData.title}</h4>
+                    <p class="text-[10px] text-slate-400 mt-0.5">${gData.category} ${distanceText} • Kurucu: ${gData.creatorName}</p>
+                </div>
+                <span class="text-[9px] ${isOpen ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border-rose-500/30'} px-2 py-0.5 rounded-full border">${gData.status}</span>
+            </div>
+            <p class="text-[11px] text-slate-300 leading-relaxed">${gData.desc}</p>
+            <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-700/40">
+                <span>📅 ${formattedDate}</span>
+                <span>👤 ${gData.memberCount || 1} Katılımcı</span>
+            </div>
+            <div class="flex justify-end pt-1">
+                <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition shadow-sm">Sohbete Katıl</button>
+            </div>
+        `;
+        groupsContainer.appendChild(card);
+
+        // 2. Takvim Kartı (iOS Tarzı)
+        if (gData.eventDate && new Date(gData.eventDate) > now) {
+            futureEventsCount++;
+            const eventDateObj = new Date(gData.eventDate);
+            const dayNum = eventDateObj.getDate();
+            const monthName = eventDateObj.toLocaleString('tr-TR', { month: 'short' }).toUpperCase();
+            const timeStr = eventDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const calCard = document.createElement('div');
+            calCard.className = "bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-2xl flex items-center space-x-3 shadow-md backdrop-blur-md";
+            calCard.innerHTML = `
+                <div class="w-12 h-14 bg-indigo-600/20 border border-indigo-500/30 rounded-xl flex flex-col items-center justify-center shrink-0 overflow-hidden shadow-inner">
+                    <span class="w-full bg-indigo-600 text-white text-[9px] font-bold text-center py-0.5 uppercase tracking-wider">${monthName}</span>
+                    <span class="text-indigo-300 font-black text-base my-auto">${dayNum}</span>
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="flex justify-between items-start">
+                        <h4 class="font-bold text-slate-100 text-xs truncate">${gData.title}</h4>
+                        <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30 shrink-0 ml-2">${timeStr}</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-0.5 truncate">${gData.category} ${distanceText}</p>
+                    <p class="text-[11px] text-slate-300 mt-1 line-clamp-1">${gData.desc}</p>
+                    <div class="flex justify-between items-center mt-2 pt-2 border-t border-slate-700/40">
+                        <span class="text-[10px] text-slate-400">👤 ${gData.memberCount || 1} Katılımcı</span>
+                        <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold rounded-lg transition shadow-sm">Git</button>
+                    </div>
+                </div>
+            `;
+            calendarContainer.appendChild(calCard);
+        }
+
+        // Harita Pinleri
+        if (mapInstance && gData.latitude && gData.longitude) {
+            const marker = L.marker([gData.latitude, gData.longitude]).addTo(mapInstance);
+            marker.bindPopup(`
+                <div style="font-family:sans-serif; color:#0f172a; min-width:160px;">
+                    <h4 style="font-weight:bold; font-size:13px; margin-bottom:2px; color:#4f46e5;">${gData.title}</h4>
+                    <p style="font-size:10px; color:#475569; margin-bottom:4px;">📅 ${formattedDate}</p>
+                    <p style="font-size:11px; margin-bottom:6px; color:#334155;">${gData.desc}</p>
+                    <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" style="background:#4f46e5; color:#fff; border:none; padding:4px 8px; font-size:10px; border-radius:6px; cursor:pointer; width:100%;">Sohbete Git</button>
+                </div>
+            `);
+            markerList.push(marker);
         }
     });
+
+    if (futureEventsCount === 0) {
+        calendarContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Şu an planlanmış gelecek zamanlı etkinlik bulunmuyor.</p>';
+    }
 }
 
 // Sohbet Ekranına Geçiş
@@ -442,9 +526,13 @@ function loadChatMessages(groupId) {
     });
 }
 
+// Buton Kilidi Korumalı Mesaj Gönderme
 chatSendBtn.addEventListener('click', async () => {
     const text = chatInput.value.trim();
     if (!text || !currentActiveGroupId) return;
+
+    chatSendBtn.disabled = true;
+    chatSendBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
     const filteredText = filterBadWords(text);
     try {
@@ -460,6 +548,9 @@ chatSendBtn.addEventListener('click', async () => {
         chatInput.value = '';
     } catch (error) {
         alert("Mesaj gönderilemedi: " + error.message);
+    } finally {
+        chatSendBtn.disabled = false;
+        chatSendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 });
 

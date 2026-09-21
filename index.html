@@ -84,32 +84,39 @@
             <div class="flex-grow relative overflow-hidden">
                 
                 <!-- SEKME 1: Gruplar & Etkinlikler -->
-                <div id="view-groups" class="tab-view active flex-col h-full p-4 overflow-y-auto space-y-4">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <h3 class="font-bold text-slate-100 text-sm">Etkinlikler & Gruplar</h3>
-                            <p class="text-[10px] text-slate-400">Haritadaki konumsal buluşmalara katıl.</p>
-                        </div>
-                        <button id="open-create-group-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-xl transition shadow-md">+ Grup Kur</button>
-                    </div>
+<div id="view-groups" class="tab-view active flex-col h-full p-4 overflow-y-auto space-y-4">
+    <div class="flex justify-between items-center">
+        <div>
+            <h3 class="font-bold text-slate-100 text-sm">Etkinlikler & Gruplar</h3>
+            <p class="text-[10px] text-slate-400">Haritadaki konumsal buluşmalara katıl.</p>
+        </div>
+        <button id="open-create-group-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-xl transition shadow-md">+ Grup Kur</button>
+    </div>
 
-                    <div id="groups-container" class="space-y-3 pb-6"></div>
-                </div>
+    <!-- YAKINDAN UZAĞA SIRALAMA BUTONU -->
+    <div class="flex items-center justify-between bg-slate-800/40 border border-slate-800 p-2.5 rounded-xl">
+        <span class="text-[11px] text-slate-300 font-medium">Konum Sıralaması:</span>
+        <button id="sort-by-distance-btn" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold rounded-lg transition flex items-center space-x-1">
+            <span>📍 Yakınımdakiler (En Yakın)</span>
+        </button>
+    </div>
+
+    <!-- Dinamik Gruplar Listesi -->
+    <div id="groups-container" class="space-y-3 pb-6"></div>
+</div>
 
                 <!-- SEKME 2: Harita -->
                 <div id="view-map" class="tab-view flex-col h-full relative">
                     <div id="map" class="w-full h-full bg-slate-950"></div>
                 </div>
 
-                <!-- SEKME 3: Etkinlik Takvimi (YENİ EKLENDİ) -->
+                <!-- SEKME 3: Etkinlik Takvimi (iOS Tarzı Ajanda) -->
                 <div id="view-calendar" class="tab-view flex-col h-full p-4 space-y-4 overflow-y-auto">
                     <div>
                         <h3 class="font-bold text-slate-100 text-sm">Gelecek Zamanlı Takvim</h3>
                         <p class="text-[10px] text-slate-400">İleri tarihlerde planlanan etkinlikleri incele.</p>
                     </div>
-                    <div id="calendar-container" class="space-y-3 pb-6">
-                        <!-- Gelecek etkinlikler buraya dolacak -->
-                    </div>
+                    <div id="calendar-container" class="space-y-3 pb-6"></div>
                 </div>
 
                 <!-- SEKME 4: Profil -->
@@ -144,7 +151,7 @@
 
             </div>
 
-            <!-- ALT NAVİGASYON ÇUBUĞU (PANDA MENÜ - TAKVİM EKLENDİ) -->
+            <!-- ALT NAVİGASYON ÇUBUĞU (PANDA MENÜ) -->
             <div class="px-4 py-3 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex justify-between items-center z-10 shrink-0">
                 <button class="tab-btn flex flex-col items-center space-y-0.5 text-indigo-400 transition" data-target="view-groups">
                     <span class="text-base">💬</span>
