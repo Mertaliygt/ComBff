@@ -77,6 +77,7 @@ const cancelCreateGroupBtn = document.getElementById('cancel-create-group');
 const newGroupTitle = document.getElementById('new-group-title');
 const newGroupCategory = document.getElementById('new-group-category');
 const newGroupDesc = document.getElementById('new-group-desc');
+const selectedCoordsText = document.getElementById('selected-coords-text');
 
 const chatMessagesContainer = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
@@ -93,6 +94,10 @@ const cancelReportBtn = document.getElementById('cancel-report-btn');
 
 let isRegisterMode = false;
 let mapInstance = null;
+let miniMapInstance = null;
+let selectedLat = 40.9923; // Varsayılan Kadıköy
+let selectedLng = 29.0294;
+let markerList = [];
 let currentActiveGroupId = null;
 let currentChatUnsubscribe = null;
 let reportedMessageData = null;
@@ -134,7 +139,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-// Giriş / Kayıt Modu Değiştirme
+// Giriş / Kayıt Modu
 toggleModeBtn.addEventListener('click', () => {
     isRegisterMode = !isRegisterMode;
     if (isRegisterMode) {
@@ -227,8 +232,12 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- DİNAMİK GRUP & ETKİNLİK SİSTEMİ ---
-openCreateGroupModalBtn.addEventListener('click', () => createGroupModal.classList.remove('hidden'));
+// --- DİNAMİK GRUP & HARİTA PİN SİSTEMİ ---
+openCreateGroupModalBtn.addEventListener('click', () => {
+    createGroupModal.classList.remove('hidden');
+    setTimeout(() => { initMiniMap(); }, 200);
+});
+
 cancelCreateGroupBtn.addEventListener('click', () => createGroupModal.classList.add('hidden'));
 
 submitCreateGroupBtn.addEventListener('click', async () => {
@@ -246,9 +255,11 @@ submitCreateGroupBtn.addEventListener('click', async () => {
             title,
             category,
             desc,
+            latitude: selectedLat,
+            longitude: selectedLng,
             creatorUid: auth.currentUser.uid,
             creatorName,
-            status: "Açık", // Açık veya Kapalı
+            status: "Açık",
             createdAt: serverTimestamp()
         });
 
@@ -262,12 +273,19 @@ submitCreateGroupBtn.addEventListener('click', async () => {
     }
 });
 
-// Grupları Listele
+// Grupları ve Harita Pinlerini Yükleme
 function loadGroups() {
     groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Gruplar yükleniyor...</p>';
     
     onSnapshot(collection(db, "groups"), (snapshot) => {
         groupsContainer.innerHTML = '';
+        
+        // Harita pinlerini temizle
+        markerList.forEach(m => {
+            if (mapInstance) mapInstance.removeLayer(m);
+        });
+        markerList = [];
+
         if (snapshot.empty) {
             groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Henüz etkinlik grubu açılmamış. İlkini sen kur!</p>';
             return;
@@ -278,6 +296,7 @@ function loadGroups() {
             const gId = docSnap.id;
             const isOpen = gData.status !== "Kapalı";
 
+            // 1. Liste Görünümü Kartı
             const card = document.createElement('div');
             card.className = "bg-slate-800/50 border border-slate-800 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
             card.innerHTML = `
@@ -294,11 +313,24 @@ function loadGroups() {
                 </div>
             `;
             groupsContainer.appendChild(card);
+
+            // 2. Harita Pin (Marker) Oluşturma
+            if (mapInstance && gData.latitude && gData.longitude) {
+                const marker = L.marker([gData.latitude, gData.longitude]).addTo(mapInstance);
+                marker.bindPopup(`
+                    <div style="font-family:sans-serif; color:#0f172a; min-width:150px;">
+                        <h4 style="font-weight:bold; font-size:13px; margin-bottom:2px; color:#4f46e5;">${gData.title}</h4>
+                        <p style="font-size:11px; margin-bottom:6px; color:#334155;">${gData.desc}</p>
+                        <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" style="background:#4f46e5; color:#fff; border:none; padding:4px 8px; font-size:10px; border-radius:6px; cursor:pointer; width:100%;">Sohbete Git</button>
+                    </div>
+                `);
+                markerList.push(marker);
+            }
         });
     });
 }
 
-// Chat Ekranına Geçiş
+// Sohbet Ekranına Geçiş
 window.openGroupChat = function(groupId, groupTitle, groupStatus) {
     currentActiveGroupId = groupId;
     chatGroupTitle.textContent = groupTitle;
@@ -543,7 +575,6 @@ async function loadModGroups() {
                 ${isOpen ? 'Grubu / Chati Kapat' : 'Grubu Aç'}
             </button>
         `;
-        modGroupsContainer.classList.remove('hidden');
         modGroupsContainer.appendChild(card);
     });
 
@@ -560,6 +591,7 @@ async function loadModGroups() {
 logoutBtnPending.addEventListener('click', () => signOut(auth));
 logoutBtnMain.addEventListener('click', () => signOut(auth));
 
+// Ana Harita Başlatma
 function initMap() {
     if (mapInstance) {
         mapInstance.invalidateSize();
@@ -567,5 +599,25 @@ function initMap() {
     }
     mapInstance = L.map('map').setView([40.9923, 29.0294], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
-    setTimeout(() => { mapInstance.invalidateSize(); }, 200);
+    setTimeout(() => { mapInstance.invalidateSize(); loadGroups(); }, 200);
+}
+
+// Grup Oluşturma için Mini Harita
+function initMiniMap() {
+    if (miniMapInstance) {
+        miniMapInstance.invalidateSize();
+        return;
+    }
+    miniMapInstance = L.map('mini-map').setView([40.9923, 29.0294], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(miniMapInstance);
+
+    let tempMarker = L.marker([40.9923, 29.0294]).addTo(miniMapInstance);
+
+    miniMapInstance.on('click', (e) => {
+        selectedLat = e.latlng.lat;
+        selectedLng = e.latlng.lng;
+        tempMarker.setLatLng([selectedLat, selectedLng]);
+        selectedCoordsText.textContent = `Seçilen Konum: ${selectedLat.toFixed(4)}, ${selectedLng.toFixed(4)}`;
+    });
+    setTimeout(() => { miniMapInstance.invalidateSize(); }, 200);
 }
