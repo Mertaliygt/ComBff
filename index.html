@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sosyal Platform & Harita Etkinlikleri</title>
+    <title>Sosyal Platform & Etkinlik Takvimi</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -24,7 +24,7 @@
             <div class="my-auto space-y-6">
                 <div class="text-center space-y-2">
                     <h1 class="text-2xl font-black tracking-tight text-indigo-400">Sosyal Ağ</h1>
-                    <p class="text-xs text-slate-400">Harita tabanlı etkinlikler kur, sosyalleş.</p>
+                    <p class="text-xs text-slate-400">Etkinlikler kur, takvimi takip et, sosyalleş.</p>
                 </div>
 
                 <div class="space-y-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
@@ -93,16 +93,26 @@
                         <button id="open-create-group-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-xl transition shadow-md">+ Grup Kur</button>
                     </div>
 
-                    <!-- Dinamik Gruplar Listesi -->
                     <div id="groups-container" class="space-y-3 pb-6"></div>
                 </div>
 
-                <!-- SEKME 2: Harita (Pinler Burada Görünecek) -->
+                <!-- SEKME 2: Harita -->
                 <div id="view-map" class="tab-view flex-col h-full relative">
                     <div id="map" class="w-full h-full bg-slate-950"></div>
                 </div>
 
-                <!-- SEKME 3: Profil -->
+                <!-- SEKME 3: Etkinlik Takvimi (YENİ EKLENDİ) -->
+                <div id="view-calendar" class="tab-view flex-col h-full p-4 space-y-4 overflow-y-auto">
+                    <div>
+                        <h3 class="font-bold text-slate-100 text-sm">Gelecek Zamanlı Takvim</h3>
+                        <p class="text-[10px] text-slate-400">İleri tarihlerde planlanan etkinlikleri incele.</p>
+                    </div>
+                    <div id="calendar-container" class="space-y-3 pb-6">
+                        <!-- Gelecek etkinlikler buraya dolacak -->
+                    </div>
+                </div>
+
+                <!-- SEKME 4: Profil -->
                 <div id="view-profile" class="tab-view flex-col h-full p-4 space-y-4 overflow-y-auto">
                     <div class="bg-slate-800/50 border border-slate-800 p-4 rounded-2xl space-y-3 text-center">
                         <div class="w-16 h-16 bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-black text-xl rounded-full flex items-center justify-center mx-auto">👤</div>
@@ -114,7 +124,7 @@
                     </div>
                 </div>
 
-                <!-- SEKME 4: Canlı Sohbet Odası -->
+                <!-- SEKME 5: Canlı Sohbet Odası -->
                 <div id="view-chat" class="tab-view flex-col h-full bg-slate-900 relative">
                     <div class="p-3 bg-slate-800/80 border-b border-slate-700/50 flex items-center justify-between shrink-0">
                         <div class="flex items-center space-x-2">
@@ -134,34 +144,44 @@
 
             </div>
 
-            <!-- ALT NAVİGASYON ÇUBUĞU -->
-            <div class="px-6 py-3 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex justify-between items-center z-10 shrink-0">
+            <!-- ALT NAVİGASYON ÇUBUĞU (PANDA MENÜ - TAKVİM EKLENDİ) -->
+            <div class="px-4 py-3 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex justify-between items-center z-10 shrink-0">
                 <button class="tab-btn flex flex-col items-center space-y-0.5 text-indigo-400 transition" data-target="view-groups">
                     <span class="text-base">💬</span>
-                    <span class="text-[10px] font-medium">Gruplar</span>
+                    <span class="text-[9px] font-medium">Gruplar</span>
                 </button>
                 <button class="tab-btn flex flex-col items-center space-y-0.5 text-slate-400 hover:text-slate-200 transition" data-target="view-map">
                     <span class="text-base">🗺️</span>
-                    <span class="text-[10px] font-medium">Harita</span>
+                    <span class="text-[9px] font-medium">Harita</span>
+                </button>
+                <button class="tab-btn flex flex-col items-center space-y-0.5 text-slate-400 hover:text-slate-200 transition" data-target="view-calendar">
+                    <span class="text-base">📅</span>
+                    <span class="text-[9px] font-medium">Takvim</span>
                 </button>
                 <button class="tab-btn flex flex-col items-center space-y-0.5 text-slate-400 hover:text-slate-200 transition" data-target="view-profile">
                     <span class="text-base">⚙️</span>
-                    <span class="text-[10px] font-medium">Profil</span>
+                    <span class="text-[9px] font-medium">Profil</span>
                 </button>
             </div>
         </div>
 
-        <!-- GRUP OLUŞTURMA MODALI (Harita Konum Seçimli) -->
+        <!-- GRUP OLUŞTURMA MODALI -->
         <div id="create-group-modal" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-[999] hidden flex items-center justify-center p-4">
             <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-4 space-y-3 shadow-2xl overflow-y-auto max-h-[90%]">
                 <h3 class="font-bold text-slate-100 text-sm">Yeni Etkinlik & Konum Seç</h3>
                 <input type="text" id="new-group-title" placeholder="Grup Adı (Örn: Moda Kahve Buluşması)" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
                 <input type="text" id="new-group-category" placeholder="Kategori (Örn: Spor • Kadıköy)" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                
+                <div>
+                    <label class="block text-[10px] text-slate-400 mb-1">Etkinlik Tarihi ve Saati:</label>
+                    <input type="datetime-local" id="new-group-date" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                </div>
+
                 <textarea id="new-group-desc" placeholder="Açıklama..." rows="2" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
                 
                 <div>
                     <label class="block text-[10px] text-slate-400 mb-1">Haritadan Buluşma Noktasına Tıkla:</label>
-                    <div id="mini-map" class="w-full h-40 rounded-xl border border-slate-700"></div>
+                    <div id="mini-map" class="w-full h-36 rounded-xl border border-slate-700"></div>
                     <p id="selected-coords-text" class="text-[10px] text-indigo-400 mt-1">Seçilen Konum: Kadıköy (Varsayılan)</p>
                 </div>
 
@@ -193,7 +213,7 @@
             <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
                 <div>
                     <h3 class="font-bold text-indigo-400 text-base">Moderatör Paneli</h3>
-                    <p class="text-[11px] text-slate-400">Onay bekleyenler, şikayetler ve grup statüleri</p>
+                    <p class="text-[11px] text-slate-400">Onay bekleyenler, şikayetler ve ban yönetimi</p>
                 </div>
                 <button id="close-mod-panel-btn" class="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center text-slate-300 text-sm">✕</button>
             </div>

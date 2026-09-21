@@ -68,14 +68,16 @@ const profileName = document.getElementById('profile-name');
 const profileEmail = document.getElementById('profile-email');
 const profileBio = document.getElementById('profile-bio');
 
-// Grup & Chat Elementleri
+// Grup, Takvim & Chat Elementleri
 const groupsContainer = document.getElementById('groups-container');
+const calendarContainer = document.getElementById('calendar-container');
 const openCreateGroupModalBtn = document.getElementById('open-create-group-modal');
 const createGroupModal = document.getElementById('create-group-modal');
 const submitCreateGroupBtn = document.getElementById('submit-create-group');
 const cancelCreateGroupBtn = document.getElementById('cancel-create-group');
 const newGroupTitle = document.getElementById('new-group-title');
 const newGroupCategory = document.getElementById('new-group-category');
+const newGroupDate = document.getElementById('new-group-date');
 const newGroupDesc = document.getElementById('new-group-desc');
 const selectedCoordsText = document.getElementById('selected-coords-text');
 
@@ -95,7 +97,7 @@ const cancelReportBtn = document.getElementById('cancel-report-btn');
 let isRegisterMode = false;
 let mapInstance = null;
 let miniMapInstance = null;
-let selectedLat = 40.9923; // Varsayılan Kadıköy
+let selectedLat = 40.9923; 
 let selectedLng = 29.0294;
 let markerList = [];
 let currentActiveGroupId = null;
@@ -232,7 +234,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// --- DİNAMİK GRUP & HARİTA PİN SİSTEMİ ---
+// --- DİNAMİK GRUP & TAKVİM SİSTEMİ ---
 openCreateGroupModalBtn.addEventListener('click', () => {
     createGroupModal.classList.remove('hidden');
     setTimeout(() => { initMiniMap(); }, 200);
@@ -243,9 +245,10 @@ cancelCreateGroupBtn.addEventListener('click', () => createGroupModal.classList.
 submitCreateGroupBtn.addEventListener('click', async () => {
     const title = newGroupTitle.value.trim();
     const category = newGroupCategory.value.trim();
+    const eventDate = newGroupDate.value;
     const desc = newGroupDesc.value.trim();
 
-    if (!title || !category || !desc) return alert("Lütfen tüm alanları doldurun.");
+    if (!title || !category || !eventDate || !desc) return alert("Lütfen tüm alanları (tarih dahil) doldurun.");
 
     try {
         const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
@@ -254,17 +257,20 @@ submitCreateGroupBtn.addEventListener('click', async () => {
         await addDoc(collection(db, "groups"), {
             title,
             category,
+            eventDate,
             desc,
             latitude: selectedLat,
             longitude: selectedLng,
             creatorUid: auth.currentUser.uid,
             creatorName,
+            memberCount: 1,
             status: "Açık",
             createdAt: serverTimestamp()
         });
 
         newGroupTitle.value = '';
         newGroupCategory.value = '';
+        newGroupDate.value = '';
         newGroupDesc.value = '';
         createGroupModal.classList.add('hidden');
         loadGroups();
@@ -273,33 +279,37 @@ submitCreateGroupBtn.addEventListener('click', async () => {
     }
 });
 
-// Grupları ve Harita Pinlerini Yükleme
+// Grupları, Harita Pinlerini ve Takvimi Yükleme
 function loadGroups() {
     groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Gruplar yükleniyor...</p>';
+    calendarContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Takvim yükleniyor...</p>';
     
     onSnapshot(collection(db, "groups"), (snapshot) => {
         groupsContainer.innerHTML = '';
+        calendarContainer.innerHTML = '';
         
-        // Harita pinlerini temizle
         markerList.forEach(m => {
             if (mapInstance) mapInstance.removeLayer(m);
         });
         markerList = [];
 
         if (snapshot.empty) {
-            groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Henüz etkinlik grubu açılmamış. İlkini sen kur!</p>';
+            groupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Henüz etkinlik grubu açılmamış.</p>';
+            calendarContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Gelecek zamanlı etkinlik bulunmuyor.</p>';
             return;
         }
+
+        let futureEventsCount = 0;
+        const now = new Date();
 
         snapshot.forEach((docSnap) => {
             const gData = docSnap.data();
             const gId = docSnap.id;
             const isOpen = gData.status !== "Kapalı";
+            const formattedDate = gData.eventDate ? new Date(gData.eventDate).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belirtilmedi';
 
-            // 1. Liste Görünümü Kartı
-            const card = document.createElement('div');
-            card.className = "bg-slate-800/50 border border-slate-800 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
-            card.innerHTML = `
+            // 1. Ana Grup Kartı HTML'i
+            const cardHTML = `
                 <div class="flex justify-between items-start">
                     <div>
                         <h4 class="font-bold text-indigo-300 text-xs">${gData.title}</h4>
@@ -308,18 +318,37 @@ function loadGroups() {
                     <span class="text-[9px] ${isOpen ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border-rose-500/30'} px-2 py-0.5 rounded-full border">${gData.status}</span>
                 </div>
                 <p class="text-[11px] text-slate-300 leading-relaxed">${gData.desc}</p>
+                <div class="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-700/40">
+                    <span>📅 ${formattedDate}</span>
+                    <span>👤 ${gData.memberCount || 1} Katılımcı</span>
+                </div>
                 <div class="flex justify-end pt-1">
                     <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition shadow-sm">Sohbete Katıl</button>
                 </div>
             `;
+
+            // Listeye Ekle
+            const card = document.createElement('div');
+            card.className = "bg-slate-800/50 border border-slate-800 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
+            card.innerHTML = cardHTML;
             groupsContainer.appendChild(card);
 
-            // 2. Harita Pin (Marker) Oluşturma
+            // Gelecek Zamanlı Etkinlik Kontrolü ve Takvime Ekleme
+            if (gData.eventDate && new Date(gData.eventDate) > now) {
+                futureEventsCount++;
+                const calCard = document.createElement('div');
+                calCard.className = "bg-slate-800/50 border border-indigo-500/30 p-3.5 rounded-xl flex flex-col space-y-2 shadow-sm";
+                calCard.innerHTML = cardHTML;
+                calendarContainer.appendChild(calCard);
+            }
+
+            // Harita Pinleri
             if (mapInstance && gData.latitude && gData.longitude) {
                 const marker = L.marker([gData.latitude, gData.longitude]).addTo(mapInstance);
                 marker.bindPopup(`
-                    <div style="font-family:sans-serif; color:#0f172a; min-width:150px;">
+                    <div style="font-family:sans-serif; color:#0f172a; min-width:160px;">
                         <h4 style="font-weight:bold; font-size:13px; margin-bottom:2px; color:#4f46e5;">${gData.title}</h4>
+                        <p style="font-size:10px; color:#475569; margin-bottom:4px;">📅 ${formattedDate}</p>
                         <p style="font-size:11px; margin-bottom:6px; color:#334155;">${gData.desc}</p>
                         <button onclick="openGroupChat('${gId}', '${gData.title}', '${gData.status}')" style="background:#4f46e5; color:#fff; border:none; padding:4px 8px; font-size:10px; border-radius:6px; cursor:pointer; width:100%;">Sohbete Git</button>
                     </div>
@@ -327,6 +356,10 @@ function loadGroups() {
                 markerList.push(marker);
             }
         });
+
+        if (futureEventsCount === 0) {
+            calendarContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Şu an planlanmış gelecek zamanlı etkinlik bulunmuyor.</p>';
+        }
     });
 }
 
@@ -385,7 +418,7 @@ function loadChatMessages(groupId) {
                     <p class="leading-relaxed">${msgData.text}</p>
                     <div class="flex justify-end items-center space-x-2 mt-1">
                         <span class="text-[9px] text-slate-500">${msgData.createdAt ? new Date(msgData.createdAt.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '...'}</span>
-                        <button class="open-report-modal text-[9px] text-rose-400 hover:underline opacity-60 hover:opacity-100 transition" data-id="${msgId}" data-text="${msgData.text}" data-sender="${msgData.senderName}">Şikayet Et</button>
+                        <button class="open-report-modal text-[9px] text-rose-400 hover:underline opacity-60 hover:opacity-100 transition" data-id="${msgId}" data-text="${msgData.text}" data-sender="${msgData.senderName}" data-uid="${msgData.senderUid}">Şikayet Et</button>
                     </div>
                 </div>
             `;
@@ -400,6 +433,7 @@ function loadChatMessages(groupId) {
                     messageId: e.target.getAttribute('data-id'),
                     messageText: e.target.getAttribute('data-text'),
                     senderName: e.target.getAttribute('data-sender'),
+                    senderUid: e.target.getAttribute('data-uid'),
                     groupId: currentActiveGroupId
                 };
                 reportModal.classList.remove('hidden');
@@ -442,6 +476,7 @@ submitReportBtn.addEventListener('click', async () => {
             messageId: reportedMessageData.messageId,
             messageText: reportedMessageData.messageText,
             senderName: reportedMessageData.senderName,
+            senderUid: reportedMessageData.senderUid,
             groupId: reportedMessageData.groupId,
             reason: reportReasonSelect.value,
             reportedBy: auth.currentUser.uid,
@@ -530,6 +565,7 @@ async function loadPendingUsers() {
     }));
 }
 
+// Şikayetler ve Banlama Paneli
 async function loadReports() {
     reportsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Yükleniyor...</p>';
     const querySnapshot = await getDocs(collection(db, "reports"));
@@ -540,12 +576,16 @@ async function loadReports() {
     reportsContainer.innerHTML = '';
     querySnapshot.forEach((docSnap) => {
         const rData = docSnap.data();
+        const rId = docSnap.id;
         const card = document.createElement('div');
         card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2";
         card.innerHTML = `
-            <h4 class="font-bold text-rose-400 text-xs">Sebep: ${rData.reason}</h4>
+            <h4 class="font-bold text-rose-400 text-xs">Sebep: ${rData.reason} - Şikayet Edilen: ${rData.senderName}</h4>
             <p class="text-[11px] text-slate-300 italic">"${rData.messageText}"</p>
-            <button data-report-id="${docSnap.id}" class="delete-report-btn bg-slate-700 text-slate-200 text-[11px] py-1.5 rounded-lg">Raporu Kaldır</button>
+            <div class="flex space-x-2 pt-1">
+                <button data-uid="${rData.senderUid || ''}" data-report-id="${rId}" class="ban-user-from-report flex-1 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-semibold py-1.5 rounded-lg transition">Kullanıcıyı Banla</button>
+                <button data-report-id="${rId}" class="delete-report-btn flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold py-1.5 rounded-lg transition">Raporu Kaldır</button>
+            </div>
         `;
         reportsContainer.appendChild(card);
     });
@@ -554,6 +594,29 @@ async function loadReports() {
         await deleteDoc(doc(db, "reports", e.target.getAttribute('data-report-id')));
         loadReports();
     }));
+
+    document.querySelectorAll('.ban-user-from-report').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const targetUid = e.target.getAttribute('data-uid');
+            const reportId = e.target.getAttribute('data-report-id');
+
+            if (!targetUid) {
+                alert("Kullanıcı ID'sine ulaşılamadı.");
+                return;
+            }
+
+            if (confirm("Bu kullanıcıyı kalıcı olarak banlamak istediğinize emin misiniz?")) {
+                try {
+                    await updateDoc(doc(db, "users", targetUid), { banned: true });
+                    await deleteDoc(doc(db, "reports", reportId));
+                    alert("Kullanıcı banlandı ve rapor temizlendi.");
+                    loadReports();
+                } catch (err) {
+                    alert("Banlama hatası: " + err.message);
+                }
+            }
+        });
+    });
 }
 
 async function loadModGroups() {
@@ -591,7 +654,6 @@ async function loadModGroups() {
 logoutBtnPending.addEventListener('click', () => signOut(auth));
 logoutBtnMain.addEventListener('click', () => signOut(auth));
 
-// Ana Harita Başlatma
 function initMap() {
     if (mapInstance) {
         mapInstance.invalidateSize();
@@ -602,7 +664,6 @@ function initMap() {
     setTimeout(() => { mapInstance.invalidateSize(); loadGroups(); }, 200);
 }
 
-// Grup Oluşturma için Mini Harita
 function initMiniMap() {
     if (miniMapInstance) {
         miniMapInstance.invalidateSize();
