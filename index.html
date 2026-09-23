@@ -9,17 +9,34 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        .screen { display: none; }
-        .screen.active { display: flex; }
-        .tab-view { display: none; }
-        .tab-view.active { display: flex; }
-        #map, #mini-map { width: 100%; height: 100%; z-index: 1; }
-        /* Harita üzerindeki resimli grup pinleri için özel stil */
-        .custom-map-thumbnail {
-            background: transparent;
-            border: none;
-        }
-    </style>
+    .screen { display: none; }
+    .screen.active { display: flex; }
+    .tab-view { display: none; }
+    .tab-view.active { display: flex; }
+    #map, #mini-map { width: 100%; height: 100%; z-index: 1; }
+    
+    /* Özel Harita Pin Stilleri */
+    .custom-map-pin {
+        background: transparent;
+        border: none;
+    }
+    .map-pin-inner {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2.5px solid #6366f1; /* İndigo Çerçeve */
+        background: #0f172a;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.2s ease;
+    }
+    .map-pin-inner:hover {
+        transform: scale(1.15);
+    }
+</style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased h-screen flex items-center justify-center overflow-hidden select-none">
 

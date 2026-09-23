@@ -578,13 +578,32 @@ function renderGroups() {
             calendarContainer.appendChild(calCard);
         }
 
-        if (mapInstance && gData.latitude && gData.longitude) {
-            const marker = L.marker([gData.latitude, gData.longitude]).addTo(mapInstance);
+       if (mapInstance && gData.latitude && gData.longitude) {
+            const imgSrc = gData.imageUrl || '';
+            const initial = gData.title ? gData.title.charAt(0).toUpperCase() : 'G';
+
+            // Görsel varsa görseli, yoksa baş harfini pin içine koyuyoruz
+            const pinHtml = imgSrc 
+                ? `<div class="map-pin-inner"><img src="${imgSrc}" style="width:100%; height:100%; object-fit:cover;"></div>`
+                : `<div class="map-pin-inner" style="color:#818cf8; font-weight:bold; font-size:14px;">${initial}</div>`;
+
+            const customIcon = L.divIcon({
+                className: 'custom-map-pin',
+                html: pinHtml,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20] // Tam merkezinden konumlanır
+            });
+
+            const marker = L.marker([gData.latitude, gData.longitude], { icon: customIcon }).addTo(mapInstance);
+            
+            // Pop-up içeriği (Grup kartı ve sohbete direkt katılım butonu)
             marker.bindPopup(`
-                <div style="font-family:sans-serif; color:#0f172a; min-width:160px;">
+                <div style="font-family:sans-serif; color:#0f172a; min-width:180px; text-align:center; padding:2px;">
+                    ${imgSrc ? `<img src="${imgSrc}" style="width:100%; height:90px; object-fit:cover; border-radius:8px; margin-bottom:6px;">` : ''}
                     <h4 style="font-weight:bold; font-size:13px; margin-bottom:2px; color:#4f46e5;">${gData.title}</h4>
-                    <p style="font-size:10px; color:#475569; margin-bottom:4px;">📅 ${formattedDate}</p>
-                    <button onclick="joinAndOpenChat('${gId}', '${gData.title}', '${gData.status}')" style="background:#4f46e5; color:#fff; border:none; padding:4px 8px; font-size:10px; border-radius:6px; cursor:pointer; width:100%;">Sohbete Git</button>
+                    <p style="font-size:10px; color:#475569; margin-bottom:2px;">Kategori: ${gData.category}</p>
+                    <p style="font-size:10px; color:#475569; margin-bottom:8px;">📅 ${formattedDate}</p>
+                    <button onclick="joinAndOpenChat('${gId}', '${gData.title}', '${gData.status}')" style="background:#4f46e5; color:#fff; border:none; padding:6px 10px; font-size:11px; border-radius:6px; cursor:pointer; width:100%; font-weight:600; box-shadow: 0 2px 5px rgba(79,70,229,0.4);">Sohbete Katıl</button>
                 </div>
             `);
             markerList.push(marker);
