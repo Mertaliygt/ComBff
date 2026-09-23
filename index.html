@@ -1,244 +1,298 @@
 <!DOCTYPE html>
-<html lang="tr" class="dark h-full">
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sosyal Platform & Etkinlik Takvimi</title>
+    <title>TripBFF - Etkinlik & Sosyal Harita</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         .screen { display: none; }
         .screen.active { display: flex; }
         .tab-view { display: none; }
         .tab-view.active { display: flex; }
-        .leaflet-top, .leaflet-bottom { z-index: 10 !important; }
+        #map, #mini-map { width: 100%; height: 100%; z-index: 1; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-full font-sans antialiased overflow-hidden flex justify-center items-center">
+<body class="bg-slate-950 text-slate-100 font-sans antialiased h-screen flex items-center justify-center overflow-hidden select-none">
 
-    <!-- MOBİL ÇERÇEVE KAPSAYICISI -->
-    <div class="w-full h-full sm:max-w-md sm:h-[844px] sm:rounded-[40px] sm:border-[8px] sm:border-slate-800 bg-slate-900 shadow-2xl flex flex-col relative overflow-hidden">
+    <!-- Emülatör / Telefon Çerçevesi (Ortalanmış Mobil Görünüm) -->
+    <div class="w-full max-w-md h-full sm:h-[90vh] sm:max-h-[850px] bg-slate-950 sm:border sm:border-slate-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl relative">
 
         <!-- 1. GİRİŞ / KAYIT EKRANI -->
-        <div id="auth-screen" class="screen active flex-col h-full justify-between p-6">
-            <div class="my-auto space-y-6">
-                <div class="text-center space-y-2">
-                    <h1 class="text-2xl font-black tracking-tight text-indigo-400">Sosyal Ağ</h1>
-                    <p class="text-xs text-slate-400">Etkinlikler kur, takvimi takip et, sosyalleş.</p>
+        <div id="auth-screen" class="screen active flex-col items-center justify-center h-full p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 absolute inset-0 z-40">
+            <div class="w-full max-w-sm bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-2xl flex flex-col space-y-4">
+                <div class="text-center">
+                    <h1 class="text-2xl font-black text-indigo-400 tracking-wider">TRIPBFF</h1>
+                    <p class="text-xs text-slate-400 mt-1">Etkinlikler ve yeni arkadaşlar keşfet</p>
                 </div>
 
-                <div class="space-y-3 bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
-                    <input type="email" id="email" placeholder="E-posta adresi" class="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
-                    <input type="password" id="password" placeholder="Şifre" class="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                <div class="flex flex-col space-y-3">
+                    <input type="email" id="email" placeholder="E-posta adresi" class="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                    <input type="password" id="password" placeholder="Şifre" class="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
 
-                    <!-- Kayıt Ol Ekstra Alanları -->
-                    <div id="register-fields" class="space-y-3 hidden pt-2 border-t border-slate-700/50">
-                        <input type="text" id="fullName" placeholder="Ad Soyad" class="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
+                    <!-- Kayıt Olurken Açılacak Ekstra Alanlar -->
+                    <div id="register-fields" class="hidden flex flex-col space-y-3 pt-1 border-t border-slate-800">
+                        <input type="text" id="fullName" placeholder="Ad Soyad" class="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
                         <div class="flex space-x-2">
-                            <input type="number" id="age" placeholder="Yaş" class="w-1/2 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
-                            <select id="gender" class="w-1/2 px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
-                                <option value="" disabled selected>Cinsiyet</option>
-                                <option value="Kadın">Kadın</option>
+                            <input type="number" id="age" placeholder="Yaş" class="w-1/2 bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                            <select id="gender" class="w-1/2 bg-slate-800/80 border border-slate-700/60 rounded-xl px-3 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-indigo-500">
+                                <option value="">Cinsiyet</option>
                                 <option value="Erkek">Erkek</option>
-                                <option value="Belirtmek İstemiyorum">Diğer</option>
+                                <option value="Kadın">Kadın</option>
+                                <option value="Diğer">Diğer</option>
                             </select>
                         </div>
-                        <textarea id="bio" placeholder="Kendinden biraz bahset..." rows="2" class="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+                        <textarea id="bio" placeholder="Kendinden biraz bahset..." rows="2" class="bg-slate-800/80 border border-slate-700/60 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
+                        
+                        <div class="flex flex-col space-y-1">
+                            <label class="text-[10px] text-slate-400 font-medium">Profil Fotoğrafı Seç (İsteğe bağlı)</label>
+                            <input type="file" id="register-photo" accept="image/*" class="text-[10px] text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+                        </div>
                     </div>
 
-                    <button id="auth-btn" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition shadow-lg shadow-indigo-600/20">Giriş Yap</button>
+                    <button id="auth-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 rounded-xl text-xs transition shadow-lg shadow-indigo-600/30">Giriş Yap</button>
                 </div>
-            </div>
 
-            <div class="text-center pb-2">
-                <p class="text-xs text-slate-400">
-                    <span id="toggle-text">Hesabın yok mu?</span> 
-                    <button id="toggle-mode-btn" class="text-indigo-400 font-bold hover:underline ml-1">Kayıt Ol</button>
-                </p>
+                <div class="flex justify-center items-center space-x-1 pt-2">
+                    <span id="toggle-text" class="text-xs text-slate-400">Hesabın yok mu?</span>
+                    <button id="toggle-mode-btn" class="text-xs font-bold text-indigo-400 hover:underline">Kayıt Ol</button>
+                </div>
             </div>
         </div>
 
         <!-- 2. ONAY BEKLİYOR EKRANI -->
-        <div id="pending-screen" class="screen flex-col h-full justify-between p-6 text-center">
-            <div class="my-auto space-y-4">
-                <div class="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto text-2xl">⏳</div>
-                <h2 class="text-lg font-bold text-slate-100">Hesabınız Onay Bekliyor</h2>
-                <p class="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">Kayıt bilgileriniz moderatörlerimiz tarafından inceleniyor. Onaylandığında platforma tam erişim sağlayabileceksiniz.</p>
+        <div id="pending-screen" class="screen flex-col items-center justify-center h-full p-6 bg-slate-950 absolute inset-0 z-40">
+            <div class="w-full max-w-sm bg-slate-900 border border-slate-800 p-6 rounded-2xl text-center space-y-4 shadow-xl">
+                <div class="w-12 h-12 bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-full flex items-center justify-center mx-auto text-xl">⏳</div>
+                <h2 class="font-bold text-base text-slate-100">Hesabınız Onay Bekliyor</h2>
+                <p class="text-xs text-slate-400 leading-relaxed">Başvurunuz moderatörler tarafından inceleniyor. Onaylandığında sisteme otomatik olarak giriş yapabileceksiniz.</p>
+                <button id="logout-btn-pending" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 rounded-xl text-xs transition border border-slate-700">Çıkış Yap</button>
             </div>
-            <button id="logout-btn-pending" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">Çıkış Yap</button>
         </div>
 
         <!-- 3. ANA UYGULAMA EKRANI -->
-        <div id="main-screen" class="screen flex-col h-full justify-between relative overflow-hidden">
+        <div id="main-screen" class="screen flex-col h-full bg-slate-950 w-full">
             
-            <!-- ÜST HEADER -->
-            <div class="px-4 py-3 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 flex justify-between items-center z-10 shrink-0">
-                <h2 class="font-extrabold text-sm text-indigo-400 tracking-wide">Sosyal Platform</h2>
+            <!-- Üst Kısım / Header -->
+            <header class="h-14 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 flex justify-between items-center shrink-0 z-20">
+                <h2 class="font-black text-indigo-400 text-sm tracking-wider">TRIPBFF</h2>
                 <div class="flex items-center space-x-2">
-                    <button id="open-mod-panel-btn" class="hidden px-2.5 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold rounded-lg transition hover:bg-amber-500/30">Mod Paneli</button>
-                    <button id="logout-btn-main" class="text-slate-400 hover:text-white text-xs px-2 py-1">Çıkış</button>
+                    <button id="open-mod-panel-btn" class="hidden px-2.5 py-1 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg">Mod Paneli</button>
+                    <button id="logout-btn-main" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold rounded-lg border border-slate-700">Çıkış</button>
                 </div>
-            </div>
+            </header>
 
-            <!-- İÇERİK ALANI (SEKMELER) -->
-            <div class="flex-grow relative overflow-hidden">
+            <!-- Orta Alan / Sekme İçerikleri -->
+            <main class="flex-grow relative overflow-hidden flex flex-col">
                 
-                <!-- SEKME 1: Gruplar & Etkinlikler -->
-<div id="view-groups" class="tab-view active flex-col h-full p-4 overflow-y-auto space-y-4">
-    <div class="flex justify-between items-center">
-        <div>
-            <h3 class="font-bold text-slate-100 text-sm">Etkinlikler & Gruplar</h3>
-            <p class="text-[10px] text-slate-400">Haritadaki konumsal buluşmalara katıl.</p>
-        </div>
-        <button id="open-create-group-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-xl transition shadow-md">+ Grup Kur</button>
-    </div>
-
-    <!-- YAKINDAN UZAĞA SIRALAMA BUTONU -->
-    <div class="flex items-center justify-between bg-slate-800/40 border border-slate-800 p-2.5 rounded-xl">
-        <span class="text-[11px] text-slate-300 font-medium">Konum Sıralaması:</span>
-        <button id="sort-by-distance-btn" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold rounded-lg transition flex items-center space-x-1">
-            <span>📍 Yakınımdakiler (En Yakın)</span>
-        </button>
-    </div>
-
-    <!-- Dinamik Gruplar Listesi -->
-    <div id="groups-container" class="space-y-3 pb-6"></div>
-</div>
-
-                <!-- SEKME 2: Harita -->
-                <div id="view-map" class="tab-view flex-col h-full relative">
-                    <div id="map" class="w-full h-full bg-slate-950"></div>
-                </div>
-
-                <!-- SEKME 3: Etkinlik Takvimi (iOS Tarzı Ajanda) -->
-                <div id="view-calendar" class="tab-view flex-col h-full p-4 space-y-4 overflow-y-auto">
-                    <div>
-                        <h3 class="font-bold text-slate-100 text-sm">Gelecek Zamanlı Takvim</h3>
-                        <p class="text-[10px] text-slate-400">İleri tarihlerde planlanan etkinlikleri incele.</p>
-                    </div>
-                    <div id="calendar-container" class="space-y-3 pb-6"></div>
-                </div>
-
-                <!-- SEKME 4: Profil -->
-                <div id="view-profile" class="tab-view flex-col h-full p-4 space-y-4 overflow-y-auto">
-                    <div class="bg-slate-800/50 border border-slate-800 p-4 rounded-2xl space-y-3 text-center">
-                        <div class="w-16 h-16 bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-black text-xl rounded-full flex items-center justify-center mx-auto">👤</div>
+                <!-- SEKME 1: GRUPLAR & ETKİNLİKLER -->
+                <div id="view-groups" class="tab-view active flex-col h-full p-4 overflow-y-auto space-y-3 pb-20">
+                    <div class="flex justify-between items-center bg-slate-900/60 border border-slate-800 p-3 rounded-xl">
                         <div>
-                            <h3 id="profile-name" class="font-bold text-slate-100 text-sm">İsim Soyisim</h3>
-                            <p id="profile-email" class="text-[11px] text-slate-400">email@adres.com</p>
+                            <h3 class="font-bold text-xs text-slate-200">Etkinlik Grupları</h3>
+                            <p class="text-[10px] text-slate-400">Çevrendeki etkinliklere katıl</p>
                         </div>
-                        <p id="profile-bio" class="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-xl italic">Biyografi yükleniyor...</p>
+                        <div class="flex space-x-2">
+                            <button id="sort-by-distance-btn" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[10px] font-semibold rounded-lg transition">📍 Yakınımdakiler</button>
+                            <button id="open-create-group-modal" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold rounded-lg transition shadow-sm">+ Grup Kur</button>
+                        </div>
+                    </div>
+                    <div id="groups-container" class="flex flex-col space-y-3">
+                        <!-- Gruplar dinamik yüklenecek -->
                     </div>
                 </div>
 
-                <!-- SEKME 5: Canlı Sohbet Odası -->
-                <div id="view-chat" class="tab-view flex-col h-full bg-slate-900 relative">
-                    <div class="p-3 bg-slate-800/80 border-b border-slate-700/50 flex items-center justify-between shrink-0">
+                <!-- SEKME 2: HARİTA -->
+                <div id="view-map" class="tab-view flex-col h-full relative pb-16">
+                    <div id="map"></div>
+                </div>
+
+                <!-- SEKME 3: TAKVİM -->
+                <div id="view-calendar" class="tab-view flex-col h-full p-4 overflow-y-auto space-y-3 pb-20">
+                    <h3 class="font-bold text-xs text-slate-200">Etkinlik Takvimi</h3>
+                    <div id="calendar-container" class="flex flex-col space-y-2.5">
+                        <!-- Takvim kartları dinamik yüklenecek -->
+                    </div>
+                </div>
+
+                <!-- SEKME 4: PROFİL -->
+                <div id="view-profile" class="tab-view flex-col h-full p-4 overflow-y-auto space-y-4 pb-20">
+                    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex flex-col items-center text-center shadow-lg">
+                        <div id="profile-avatar-container" class="mb-2"></div>
+                        <h3 id="profile-name" class="font-bold text-sm text-slate-100">Kullanıcı</h3>
+                        <p id="profile-email" class="text-[11px] text-slate-400">email@domain.com</p>
+                        <p id="profile-bio" class="text-[11px] text-slate-300 italic mt-1">Biyografi...</p>
+                        
+                        <span id="profile-role-badge" class="mt-2 text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-3 py-0.5 rounded-full font-semibold uppercase">USER</span>
+
+                        <!-- Profil Fotoğrafı Değiştirme Alanı -->
+                        <div class="mt-3 w-full max-w-xs bg-slate-800/40 border border-slate-700/40 p-2.5 rounded-xl flex flex-col space-y-2">
+                            <label class="text-[10px] text-slate-400 font-semibold text-left">Profil Fotoğrafını Değiştir</label>
+                            <input type="file" id="update-profile-photo" accept="image/*" class="text-[10px] text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+                            <button id="save-profile-photo-btn" class="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold rounded-lg transition shadow-sm">Fotoğrafı Değiştir</button>
+                        </div>
+                    </div>
+
+                    <!-- Katıldığım Gruplar Alanı -->
+                    <div class="w-full bg-slate-900/60 border border-slate-800 p-4 rounded-2xl shadow-md">
+                        <h4 class="font-bold text-xs text-indigo-300 mb-2 border-b border-slate-800 pb-1">Katıldığım Gruplar</h4>
+                        <div id="my-groups-container" class="flex flex-col space-y-2 max-h-48 overflow-y-auto pr-1">
+                            <!-- Katılınan gruplar buraya gelecek -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEKME 5: SOHBET (Gizli / Gruba Girilince Açılır) -->
+                <div id="view-chat" class="tab-view flex-col h-full bg-slate-950 absolute inset-0 z-30">
+                    <div class="h-12 bg-slate-900 border-b border-slate-800 px-3 flex justify-between items-center shrink-0">
                         <div class="flex items-center space-x-2">
-                            <button id="back-to-groups-btn" class="text-slate-400 hover:text-white text-xs px-2 py-1">← Geri</button>
-                            <h3 id="chat-group-title" class="font-bold text-slate-100 text-xs">Grup Sohbeti</h3>
+                            <button id="back-to-groups-btn" class="text-indigo-400 hover:text-indigo-300 text-xs font-bold px-2 py-1 bg-slate-800/80 rounded-lg border border-slate-700">← Geri</button>
+                            <div>
+                                <h4 id="chat-group-title" class="font-bold text-xs text-slate-100">Grup Sohbeti</h4>
+                                <span id="chat-status-badge" class="text-[9px] px-1.5 py-0.2 rounded-full border">Açık</span>
+                            </div>
                         </div>
-                        <span id="chat-status-badge" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">Açık</span>
                     </div>
-
-                    <div id="chat-messages" class="flex-grow p-4 overflow-y-auto space-y-3 flex flex-col"></div>
-
-                    <div id="chat-input-area" class="p-3 bg-slate-800/80 border-t border-slate-700/50 flex items-center space-x-2 shrink-0">
-                        <input type="text" id="chat-input" placeholder="Mesaj yazın..." class="flex-grow px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
-                        <button id="chat-send-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition">Gönder</button>
+                    <div id="chat-messages" class="flex-grow p-3 overflow-y-auto flex flex-col space-y-2 pb-4">
+                        <!-- Mesajlar -->
+                    </div>
+                    <div id="chat-input-area" class="p-3 bg-slate-900 border-t border-slate-800 flex items-center space-x-2 shrink-0">
+                        <input type="text" id="chat-input" placeholder="Mesaj yaz..." class="flex-grow bg-slate-800 border border-slate-700/60 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+                        <button id="chat-send-btn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition shadow-sm">Gönder</button>
                     </div>
                 </div>
 
-            </div>
+            </main>
 
-            <!-- ALT NAVİGASYON ÇUBUĞU (PANDA MENÜ) -->
-            <div class="px-4 py-3 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex justify-between items-center z-10 shrink-0">
-                <button class="tab-btn flex flex-col items-center space-y-0.5 text-indigo-400 transition" data-target="view-groups">
+            <!-- Alt Navigasyon Barı -->
+            <nav class="h-16 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex justify-around items-center shrink-0 z-20">
+                <button data-target="view-groups" class="tab-btn flex flex-col items-center justify-center flex-grow text-indigo-400 py-1 transition">
                     <span class="text-base">💬</span>
-                    <span class="text-[9px] font-medium">Gruplar</span>
+                    <span class="text-[10px] mt-0.5 font-medium">Gruplar</span>
                 </button>
-                <button class="tab-btn flex flex-col items-center space-y-0.5 text-slate-400 hover:text-slate-200 transition" data-target="view-map">
+                <button data-target="view-map" class="tab-btn flex flex-col items-center justify-center flex-grow text-slate-400 py-1 transition">
                     <span class="text-base">🗺️</span>
-                    <span class="text-[9px] font-medium">Harita</span>
+                    <span class="text-[10px] mt-0.5 font-medium">Harita</span>
                 </button>
-                <button class="tab-btn flex flex-col items-center space-y-0.5 text-slate-400 hover:text-slate-200 transition" data-target="view-calendar">
+                <button data-target="view-calendar" class="tab-btn flex flex-col items-center justify-center flex-grow text-slate-400 py-1 transition">
                     <span class="text-base">📅</span>
-                    <span class="text-[9px] font-medium">Takvim</span>
+                    <span class="text-[10px] mt-0.5 font-medium">Takvim</span>
                 </button>
-                <button class="tab-btn flex flex-col items-center space-y-0.5 text-slate-400 hover:text-slate-200 transition" data-target="view-profile">
+                <button data-target="view-profile" class="tab-btn flex flex-col items-center justify-center flex-grow text-slate-400 py-1 transition">
                     <span class="text-base">⚙️</span>
-                    <span class="text-[9px] font-medium">Profil</span>
+                    <span class="text-[10px] mt-0.5 font-medium">Profil</span>
                 </button>
-            </div>
+            </nav>
+
         </div>
 
-        <!-- GRUP OLUŞTURMA MODALI -->
-        <div id="create-group-modal" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm z-[999] hidden flex items-center justify-center p-4">
-            <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-2xl p-4 space-y-3 shadow-2xl overflow-y-auto max-h-[90%]">
-                <h3 class="font-bold text-slate-100 text-sm">Yeni Etkinlik & Konum Seç</h3>
-                <input type="text" id="new-group-title" placeholder="Grup Adı (Örn: Moda Kahve Buluşması)" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
-                <input type="text" id="new-group-category" placeholder="Kategori (Örn: Spor • Kadıköy)" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
-                
-                <div>
-                    <label class="block text-[10px] text-slate-400 mb-1">Etkinlik Tarihi ve Saati:</label>
-                    <input type="datetime-local" id="new-group-date" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500">
-                </div>
+    </div>
 
-                <textarea id="new-group-desc" placeholder="Açıklama..." rows="2" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-indigo-500 resize-none"></textarea>
-                
-                <div>
-                    <label class="block text-[10px] text-slate-400 mb-1">Haritadan Buluşma Noktasına Tıkla:</label>
-                    <div id="mini-map" class="w-full h-36 rounded-xl border border-slate-700"></div>
-                    <p id="selected-coords-text" class="text-[10px] text-indigo-400 mt-1">Seçilen Konum: Kadıköy (Varsayılan)</p>
-                </div>
-
-                <div class="flex space-x-2 pt-1">
-                    <button id="submit-create-group" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition">Oluştur</button>
-                    <button id="cancel-create-group" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition">İptal</button>
-                </div>
+    <!-- KULLANICI PROFİL KARTI MODALI (Tıklayınca Açılır) -->
+    <div id="user-card-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col items-center text-center space-y-3 shadow-2xl relative">
+            <button id="close-user-card" class="absolute top-3 right-3 text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 bg-slate-800 rounded-lg">✕</button>
+            
+            <div id="card-avatar-container" class="mt-2"></div>
+            <div>
+                <h3 id="card-username" class="font-bold text-sm text-slate-100">Kullanıcı Adı</h3>
+                <p id="card-email" class="text-[11px] text-slate-400">email@domain.com</p>
             </div>
-        </div>
 
-        <!-- MESAJ ŞİKAYET ET MODALI -->
-        <div id="report-modal" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-[10000] hidden flex items-center justify-center p-4">
-            <div class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-4 space-y-3 shadow-2xl">
-                <h3 class="font-bold text-slate-100 text-sm">Mesajı Şikayet Et</h3>
-                <select id="report-reason" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs text-slate-300 focus:outline-none">
-                    <option value="Küfür / Hakaret">Küfür / Hakaret</option>
-                    <option value="Taciz / Rahatsız Etme">Taciz / Rahatsız Etme</option>
-                    <option value="Uygunsuz İçerik">Uygunsuz İçerik</option>
-                </select>
-                <div class="flex space-x-2 pt-2">
-                    <button id="submit-report-btn" class="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold rounded-xl transition">Şikayet Et</button>
-                    <button id="cancel-report-btn" class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition">İptal</button>
+            <!-- Trol Ünvan Rozeti -->
+            <div id="card-title-badge" class="bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 px-3 py-1 rounded-full text-[11px] font-bold shadow-sm">
+                Yeni Gezgin 🎒
+            </div>
+
+            <p id="card-bio" class="text-[11px] text-slate-300 italic px-2">Biyografi yok...</p>
+
+            <div class="w-full bg-slate-800/60 border border-slate-700/50 p-2.5 rounded-xl flex justify-around text-center">
+                <div>
+                    <span class="block text-[10px] text-slate-400">Üye Olunan Grup</span>
+                    <span id="card-group-count" class="font-bold text-xs text-indigo-400">0</span>
+                </div>
+                <div class="border-r border-slate-700"></div>
+                <div>
+                    <span class="block text-[10px] text-slate-400">Toplam Mesaj</span>
+                    <span id="card-message-count" class="font-bold text-xs text-indigo-400">0</span>
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- MODERATÖR PANELİ MODALI -->
-        <div id="mod-modal" class="absolute inset-0 bg-slate-900/95 backdrop-blur-md z-[9999] hidden flex-col p-4 overflow-y-auto">
-            <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
-                <div>
-                    <h3 class="font-bold text-indigo-400 text-base">Moderatör Paneli</h3>
-                    <p class="text-[11px] text-slate-400">Onay bekleyenler, şikayetler ve ban yönetimi</p>
-                </div>
-                <button id="close-mod-panel-btn" class="w-8 h-8 bg-slate-800 hover:bg-slate-700 rounded-full flex items-center justify-center text-slate-300 text-sm">✕</button>
+    <!-- MODALLAR (Grup Kurma & Şikayet & Mod Paneli) -->
+
+    <!-- Grup Kurma Modalı -->
+    <div id="create-group-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="font-bold text-sm text-indigo-400">Yeni Etkinlik Grubu Kur</h3>
+            <input type="text" id="new-group-title" placeholder="Grup / Etkinlik Başlığı" class="bg-slate-800 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
+            <input type="text" id="new-group-category" placeholder="Kategori (Örn: Doğa Yürüyüşü, Kamp)" class="bg-slate-800 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
+            <input type="datetime-local" id="new-group-date" class="bg-slate-800 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+            <textarea id="new-group-desc" placeholder="Etkinlik açıklaması..." rows="2" class="bg-slate-800 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none resize-none"></textarea>
+            
+            <div class="flex flex-col space-y-1">
+                <label class="text-[10px] text-slate-400 font-medium">Etkinlik Görseli (İsteğe bağlı)</label>
+                <input type="file" id="new-group-image" accept="image/*" class="text-[10px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-600 file:text-white cursor-pointer">
             </div>
 
-            <div class="flex space-x-2 mb-3">
+            <div class="flex flex-col space-y-1">
+                <label class="text-[10px] text-slate-400 font-medium">Haritadan Konum Seç</label>
+                <div class="w-full h-32 rounded-xl overflow-hidden border border-slate-700 relative">
+                    <div id="mini-map"></div>
+                </div>
+                <span id="selected-coords-text" class="text-[10px] text-indigo-400">Seçilen Konum: 40.9923, 29.0294</span>
+            </div>
+
+            <div class="flex space-x-2 pt-2">
+                <button id="cancel-create-group" class="flex-1 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700">İptal</button>
+                <button id="submit-create-group" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-sm">Oluştur</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Şikayet Et Modalı -->
+    <div id="report-modal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-xs bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col space-y-3 shadow-2xl">
+            <h3 class="font-bold text-xs text-rose-400">Mesajı Şikayet Et</h3>
+            <select id="report-reason" class="bg-slate-800 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none">
+                <option value="Küfür / Hakaret">Küfür / Hakaret</option>
+                <option value="Spam / Reklam">Spam / Reklam</option>
+                <option value="Uygunsuz İçerik">Uygunsuz İçerik</option>
+            </select>
+            <div class="flex space-x-2 pt-1">
+                <button id="cancel-report-btn" class="flex-1 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-xl border border-slate-700">İptal</button>
+                <button id="submit-report-btn" class="flex-1 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded-xl">Bildir</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Moderatör Paneli Modalı -->
+    <div id="mod-modal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex-col p-4 overflow-y-auto">
+        <div class="w-full max-w-md mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col space-y-3 shadow-2xl my-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <h3 class="font-bold text-xs text-amber-400">Moderatör Yönetim Paneli</h3>
+                <button id="close-mod-panel-btn" class="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 bg-slate-800 rounded">Kapat</button>
+            </div>
+            
+            <div class="flex space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <button id="mod-tab-approvals" class="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition">Onaylar</button>
-                <button id="mod-tab-reports" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Şikayetler</button>
+                <button id="mod-tab-reports" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Raporlar</button>
                 <button id="mod-tab-groups" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Gruplar</button>
             </div>
 
-            <div id="pending-users-container" class="space-y-3 flex-grow pb-4"></div>
-            <div id="reports-container" class="space-y-3 flex-grow pb-4 hidden"></div>
-            <div id="mod-groups-container" class="space-y-3 flex-grow pb-4 hidden"></div>
+            <div id="pending-users-container" class="flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+            <div id="reports-container" class="hidden flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+            <div id="mod-groups-container" class="hidden flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
         </div>
-
     </div>
 
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Ana JavaScript -->
     <script type="module" src="app.js"></script>
 </body>
 </html>
