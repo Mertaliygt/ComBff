@@ -14,6 +14,11 @@
         .tab-view { display: none; }
         .tab-view.active { display: flex; }
         #map, #mini-map { width: 100%; height: 100%; z-index: 1; }
+        /* Harita üzerindeki resimli grup pinleri için özel stil */
+        .custom-map-thumbnail {
+            background: transparent;
+            border: none;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased h-screen flex items-center justify-center overflow-hidden select-none">
@@ -278,11 +283,18 @@
                 <button id="close-mod-panel-btn" class="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 bg-slate-800 rounded">Kapat</button>
             </div>
             
-            <div class="flex space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                <button id="mod-tab-approvals" class="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition">Onaylar</button>
-                <button id="mod-tab-reports" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Raporlar</button>
-                <button id="mod-tab-groups" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Gruplar</button>
-            </div>
+            <!-- Moderatör Panelindeki Sekme Butonları Kısmına Bu Eklenmeli -->
+<div class="flex space-x-1 mb-4">
+    <button id="mod-tab-approvals" class="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition">Üye Onayları</button>
+    <button id="mod-tab-group-approvals" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Grup Onayları</button>
+    <button id="mod-tab-reports" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Şikayetler</button>
+    <button id="mod-tab-groups" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Tüm Gruplar</button>
+</div>
+
+<!-- İçerik Alanları Kısmına Bu Eklenmeli -->
+<div id="pending-groups-container" class="space-y-3 hidden">
+    <!-- Onay bekleyen gruplar burada listelenir -->
+</div>
 
             <div id="pending-users-container" class="flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
             <div id="reports-container" class="hidden flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>

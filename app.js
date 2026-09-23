@@ -62,10 +62,12 @@ const modModal = document.getElementById('mod-modal');
 const pendingUsersContainer = document.getElementById('pending-users-container');
 const reportsContainer = document.getElementById('reports-container');
 const modGroupsContainer = document.getElementById('mod-groups-container');
+const pendingGroupsContainer = document.getElementById('pending-groups-container'); // Yeni: Grup Onayları Container
 
 const modTabApprovals = document.getElementById('mod-tab-approvals');
 const modTabReports = document.getElementById('mod-tab-reports');
 const modTabGroups = document.getElementById('mod-tab-groups');
+const modTabGroupApprovals = document.getElementById('mod-tab-group-approvals'); // Yeni: Grup Onayları Sekmesi
 
 const profileName = document.getElementById('profile-name');
 const profileEmail = document.getElementById('profile-email');
@@ -366,7 +368,8 @@ function loadMyJoinedGroups(userId) {
             const gData = docSnap.data();
             const members = gData.members || [];
             
-            if (members.includes(userId) || gData.creatorUid === userId) {
+            // Sadece onaylanmış (status === "Açık" veya benzeri onaylı) ve üye olunanlar
+            if ((members.includes(userId) || gData.creatorUid === userId) && gData.status !== "Onay Bekliyor") {
                 joinedCount++;
                 const gId = docSnap.id;
                 const item = document.createElement('div');
@@ -417,6 +420,7 @@ submitCreateGroupBtn.addEventListener('click', async () => {
         const creatorName = userDoc.exists() ? userDoc.data().fullName : "Anonim";
         const creatorPhoto = userDoc.exists() ? (userDoc.data().photoUrl || '') : '';
 
+        // Yeni oluşturulan grup doğrudan "Onay Bekliyor" statüsüyle kaydedilir
         await addDoc(collection(db, "groups"), {
             title,
             category,
@@ -430,7 +434,7 @@ submitCreateGroupBtn.addEventListener('click', async () => {
             creatorPhoto,
             members: [auth.currentUser.uid],
             memberCount: 1,
-            status: "Açık",
+            status: "Onay Bekliyor",
             createdAt: serverTimestamp()
         });
 
@@ -440,6 +444,7 @@ submitCreateGroupBtn.addEventListener('click', async () => {
         newGroupDesc.value = '';
         if (newGroupImageInput) newGroupImageInput.value = '';
         createGroupModal.classList.add('hidden');
+        alert("Grup başarıyla oluşturuldu ve yönetici onayına gönderildi.");
         loadGroups();
     } catch (error) {
         alert("Grup oluşturulamadı: " + error.message);
@@ -502,6 +507,9 @@ function renderGroups() {
     const now = new Date();
 
     groupsToRender.forEach((gData) => {
+        // Yalnızca "Onay Bekliyor" olmayan grupları ana akışta göster
+        if (gData.status === "Onay Bekliyor") return;
+
         const gId = gData.id;
         const isOpen = gData.status !== "Kapalı";
         const formattedDate = gData.eventDate ? new Date(gData.eventDate).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Belirtilmedi';
@@ -675,7 +683,6 @@ function loadChatMessages(groupId) {
 
             const isMe = msgData.senderUid === auth.currentUser.uid;
 
-            // Avatar ve İsme Tıklanabilirlik Eklendi (cursor-pointer ve hover efektleri)
             const senderPhotoHtml = msgData.senderPhoto 
                 ? `<img src="${msgData.senderPhoto}" class="w-6 h-6 rounded-full object-cover mr-1.5 shrink-0 border border-indigo-500/40 cursor-pointer profile-trigger" data-uid="${msgData.senderUid}">`
                 : `<div class="w-6 h-6 rounded-full bg-indigo-600/40 text-indigo-300 font-bold text-[9px] flex items-center justify-center mr-1.5 shrink-0 cursor-pointer profile-trigger" data-uid="${msgData.senderUid}">${msgData.senderName ? msgData.senderName.charAt(0).toUpperCase() : 'U'}</div>`;
@@ -700,7 +707,6 @@ function loadChatMessages(groupId) {
 
         chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
 
-        // Profil Kartı Tetikleyicilerini Dinle
         document.querySelectorAll('.profile-trigger').forEach(el => {
             el.addEventListener('click', async (e) => {
                 const targetUid = e.target.getAttribute('data-uid');
@@ -792,35 +798,54 @@ closeModPanelBtn.addEventListener('click', () => {
     modModal.classList.add('hidden');
 });
 
+// Mod Sekme Geçişleri (Grup Onayları Eklendi)
 modTabApprovals.addEventListener('click', () => {
-    modTabApprovals.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
-    modTabReports.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
-    modTabGroups.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    setModTabActive(modTabApprovals);
     pendingUsersContainer.classList.remove('hidden');
     reportsContainer.classList.add('hidden');
     modGroupsContainer.classList.add('hidden');
+    if (pendingGroupsContainer) pendingGroupsContainer.classList.add('hidden');
     loadPendingUsers();
 });
 
 modTabReports.addEventListener('click', () => {
-    modTabReports.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
-    modTabApprovals.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
-    modTabGroups.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    setModTabActive(modTabReports);
     reportsContainer.classList.remove('hidden');
     pendingUsersContainer.classList.add('hidden');
     modGroupsContainer.classList.add('hidden');
+    if (pendingGroupsContainer) pendingGroupsContainer.classList.add('hidden');
     loadReports();
 });
 
 modTabGroups.addEventListener('click', () => {
-    modTabGroups.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
-    modTabApprovals.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
-    modTabReports.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    setModTabActive(modTabGroups);
     modGroupsContainer.classList.remove('hidden');
     pendingUsersContainer.classList.add('hidden');
     reportsContainer.classList.add('hidden');
+    if (pendingGroupsContainer) pendingGroupsContainer.classList.add('hidden');
     loadModGroups();
 });
+
+if (modTabGroupApprovals) {
+    modTabGroupApprovals.addEventListener('click', () => {
+        setModTabActive(modTabGroupApprovals);
+        if (pendingGroupsContainer) pendingGroupsContainer.classList.remove('hidden');
+        pendingUsersContainer.classList.add('hidden');
+        reportsContainer.classList.add('hidden');
+        modGroupsContainer.classList.add('hidden');
+        loadPendingGroups();
+    });
+}
+
+function setModTabActive(activeBtn) {
+    [modTabApprovals, modTabReports, modTabGroups, modTabGroupApprovals].forEach(btn => {
+        if (!btn) return;
+        btn.className = "flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition";
+    });
+    if (activeBtn) {
+        activeBtn.className = "flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition";
+    }
+}
 
 async function loadPendingUsers() {
     pendingUsersContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Yükleniyor...</p>';
@@ -863,6 +888,70 @@ async function loadPendingUsers() {
         await updateDoc(doc(db, "users", e.target.getAttribute('data-id')), { status: -1 });
         loadPendingUsers();
     }));
+}
+
+// --- Yeni: Onay Bekleyen Grupları Yükleme Fonksiyonu ---
+async function loadPendingGroups() {
+    if (!pendingGroupsContainer) return;
+    pendingGroupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Yükleniyor...</p>';
+    
+    const querySnapshot = await getDocs(query(collection(db, "groups"), where("status", "==", "Onay Bekliyor")));
+    if (querySnapshot.empty) {
+        pendingGroupsContainer.innerHTML = '<p class="text-center text-xs text-slate-500 mt-6">Onay bekleyen grup bulunmuyor.</p>';
+        return;
+    }
+
+    pendingGroupsContainer.innerHTML = '';
+    querySnapshot.forEach((docSnap) => {
+        const gData = docSnap.data();
+        const gId = docSnap.id;
+        const bannerHtml = gData.imageUrl 
+            ? `<div class="w-full h-24 overflow-hidden rounded-lg mb-2"><img src="${gData.imageUrl}" class="w-full h-full object-cover"></div>` 
+            : '';
+
+        const card = document.createElement('div');
+        card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2";
+        card.innerHTML = `
+            ${bannerHtml}
+            <h4 class="font-bold text-indigo-300 text-xs">${gData.title} <span class="text-[10px] text-slate-400 font-normal">(${gData.category})</span></h4>
+            <p class="text-[11px] text-slate-300">${gData.desc}</p>
+            <p class="text-[10px] text-slate-400">Kurucu: <span class="text-slate-200">${gData.creatorName}</span> • Tarih: ${gData.eventDate || 'Belirtilmedi'}</p>
+            <div class="flex space-x-2 pt-1">
+                <button data-id="${gId}" class="approve-group-btn flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold py-1.5 rounded-lg transition">Grubu Onayla</button>
+                <button data-id="${gId}" class="reject-group-btn flex-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-[11px] font-semibold py-1.5 rounded-lg border border-rose-500/30 transition">Reddet / Sil</button>
+            </div>
+        `;
+        pendingGroupsContainer.appendChild(card);
+    });
+
+    document.querySelectorAll('.approve-group-btn').forEach(b => {
+        b.addEventListener('click', async (e) => {
+            const gid = e.target.getAttribute('data-id');
+            try {
+                await updateDoc(doc(db, "groups", gid), { status: "Açık" });
+                alert("Grup onaylandı ve akışa eklendi.");
+                loadPendingGroups();
+                loadGroups();
+            } catch (err) {
+                alert("Onaylama hatası: " + err.message);
+            }
+        });
+    });
+
+    document.querySelectorAll('.reject-group-btn').forEach(b => {
+        b.addEventListener('click', async (e) => {
+            const gid = e.target.getAttribute('data-id');
+            if (confirm("Bu grup talebini reddetmek ve silmek istediğinize emin misiniz?")) {
+                try {
+                    await deleteDoc(doc(db, "groups", gid));
+                    alert("Grup reddedildi ve silindi.");
+                    loadPendingGroups();
+                } catch (err) {
+                    alert("İşlem hatası: " + err.message);
+                }
+            }
+        });
+    });
 }
 
 async function loadReports() {
@@ -925,6 +1014,8 @@ async function loadModGroups() {
     modGroupsContainer.innerHTML = '';
     querySnapshot.forEach((docSnap) => {
         const gData = docSnap.data();
+        if (gData.status === "Onay Bekliyor") return; // Onay bekleyenler ayrı sekmede yönetiliyor
+
         const isOpen = gData.status !== "Kapalı";
         const card = document.createElement('div');
         card.className = "bg-slate-800 border border-slate-700/60 p-3.5 rounded-xl flex flex-col space-y-2";
@@ -995,7 +1086,6 @@ function getUserTitle(messageCount, groupCount) {
     }
 }
 
-// Kullanıcının verilerini veritabanından çekip Kişi Kartını dolduran fonksiyon
 async function fetchAndOpenUserCard(uid) {
     try {
         const userDocRef = doc(db, "users", uid);
@@ -1004,7 +1094,6 @@ async function fetchAndOpenUserCard(uid) {
         if (!userDocSnap.exists()) return alert("Kullanıcı bilgisi bulunamadı.");
         const userData = userDocSnap.data();
 
-        // Kullanıcının katıldığı grup sayısını hesapla
         let joinedGroupsCount = 0;
         const groupsSnap = await getDocs(collection(db, "groups"));
         groupsSnap.forEach(gDoc => {
@@ -1015,7 +1104,6 @@ async function fetchAndOpenUserCard(uid) {
             }
         });
 
-        // Toplam mesaj sayısını hesaplamak için tüm gruplardaki mesajlarını sayıyoruz
         let messageCount = 0;
         for (let gDoc of groupsSnap.docs) {
             const messagesSnap = await getDocs(collection(db, "groups", gDoc.id, "messages"));
@@ -1053,11 +1141,9 @@ function openUserCardModal(userData) {
     document.getElementById('card-message-count').textContent = msgCount;
     document.getElementById('card-group-count').textContent = groupCount;
 
-    // Trol Ünvanı Ata
     const title = getUserTitle(msgCount, groupCount);
     document.getElementById('card-title-badge').textContent = title;
 
-    // Avatar
     const avatarContainer = document.getElementById('card-avatar-container');
     avatarContainer.innerHTML = '';
     if (userData.photoUrl) {
@@ -1071,7 +1157,6 @@ function openUserCardModal(userData) {
     modal.classList.add('flex');
 }
 
-// Kişi Kartını Kapatma Olayları
 document.addEventListener('DOMContentLoaded', () => {
     const closeBtn = document.getElementById('close-user-card');
     const modal = document.getElementById('user-card-modal');
