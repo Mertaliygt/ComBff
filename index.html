@@ -42,7 +42,7 @@
 
     <!-- Emülatör / Telefon Çerçevesi (Ortalanmış Mobil Görünüm) -->
     <div class="w-full max-w-md h-full sm:h-[90vh] sm:max-h-[850px] bg-slate-950 sm:border sm:border-slate-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl relative">
-
+           
         <!-- 1. GİRİŞ / KAYIT EKRANI -->
         <div id="auth-screen" class="screen active flex-col items-center justify-center h-full p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 absolute inset-0 z-40">
             <div class="w-full max-w-sm bg-slate-900/80 backdrop-blur-xl border border-slate-800 p-6 rounded-2xl shadow-2xl flex flex-col space-y-4">
@@ -102,6 +102,16 @@
             <header class="h-14 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 flex justify-between items-center shrink-0 z-20">
                 <h2 class="font-black text-indigo-400 text-sm tracking-wider">TRIPBFF</h2>
                 <div class="flex items-center space-x-2">
+                    <!-- Zil İkonu ve Bildirim Rozeti (Sistem Mesajı Altyapısı) -->
+                    <div class="relative">
+                        <button onclick="toggleNotificationModal()" class="relative p-1.5 text-slate-300 hover:text-white transition-colors bg-slate-800/80 rounded-lg border border-slate-700 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                            </svg>
+                            <span id="notification-badge" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center hidden">0</span>
+                        </button>
+                    </div>
+
                     <button id="open-mod-panel-btn" class="hidden px-2.5 py-1 bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[10px] font-bold rounded-lg">Mod Paneli</button>
                     <button id="logout-btn-main" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold rounded-lg border border-slate-700">Çıkış</button>
                 </div>
@@ -245,6 +255,27 @@
         </div>
     </div>
 
+    <!-- SİSTEM MESAJLARI / BİLDİRİMLER MODALI -->
+    <div id="notification-modal" class="hidden fixed inset-0 bg-black/60 z-50 items-center justify-center p-4">
+        <div class="w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl p-4 flex flex-col space-y-3 shadow-2xl max-h-[80vh]">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm">🔔</span>
+                    <h3 class="font-bold text-xs text-indigo-400">Sistem Bildirimleri</h3>
+                </div>
+                <button onclick="toggleNotificationModal()" class="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 bg-slate-800 rounded">✕</button>
+            </div>
+            
+            <div id="notification-list" class="flex flex-col space-y-2 overflow-y-auto max-h-60 pr-1 divide-y divide-slate-800/50">
+                <div class="text-center text-slate-500 py-6 text-xs">Henüz bildiriminiz bulunmuyor.</div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 text-right">
+                <button onclick="markAllNotificationsAsRead()" class="text-[10px] text-indigo-400 hover:text-indigo-300 font-medium px-2 py-1 rounded bg-indigo-500/10 transition">Tümünü Okundu Say</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODALLAR (Grup Kurma & Şikayet & Mod Paneli) -->
 
     <!-- Grup Kurma Modalı -->
@@ -300,19 +331,14 @@
                 <button id="close-mod-panel-btn" class="text-slate-400 hover:text-slate-200 text-xs font-bold px-2 py-0.5 bg-slate-800 rounded">Kapat</button>
             </div>
             
-            <!-- Moderatör Panelindeki Sekme Butonları Kısmına Bu Eklenmeli -->
-<div class="flex space-x-1 mb-4">
-    <button id="mod-tab-approvals" class="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition">Üye Onayları</button>
-    <button id="mod-tab-group-approvals" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Grup Onayları</button>
-    <button id="mod-tab-reports" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Şikayetler</button>
-    <button id="mod-tab-groups" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Tüm Gruplar</button>
-</div>
+            <div class="flex space-x-1 mb-4">
+                <button id="mod-tab-approvals" class="flex-1 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold transition">Üye Onayları</button>
+                <button id="mod-tab-group-approvals" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Grup Onayları</button>
+                <button id="mod-tab-reports" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Şikayetler</button>
+                <button id="mod-tab-groups" class="flex-1 py-1.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition">Tüm Gruplar</button>
+            </div>
 
-<!-- İçerik Alanları Kısmına Bu Eklenmeli -->
-<div id="pending-groups-container" class="space-y-3 hidden">
-    <!-- Onay bekleyen gruplar burada listelenir -->
-</div>
-
+            <div id="pending-groups-container" class="space-y-3 hidden"></div>
             <div id="pending-users-container" class="flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
             <div id="reports-container" class="hidden flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
             <div id="mod-groups-container" class="hidden flex flex-col space-y-2 max-h-64 overflow-y-auto pr-1"></div>
