@@ -1186,7 +1186,14 @@ function initMap() {
         return;
     }
     mapInstance = L.map('map').setView([40.9923, 29.0294], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
+
+    // Google Maps Canlı Uydu + Sokak Katmanı (Hybrid)
+    L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; Google Maps'
+    }).addTo(mapInstance);
+
     setTimeout(() => { mapInstance.invalidateSize(); loadGroups(); }, 200);
 }
 
@@ -1196,7 +1203,13 @@ function initMiniMap() {
         return;
     }
     miniMapInstance = L.map('mini-map').setView([40.9923, 29.0294], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(miniMapInstance);
+
+    // Google Maps Canlı Uydu + Sokak Katmanı (Hybrid)
+    L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+        maxZoom: 20,
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+        attribution: '&copy; Google Maps'
+    }).addTo(mapInstance);
 
     let tempMarker = L.marker([40.9923, 29.0294]).addTo(miniMapInstance);
 
