@@ -6,7 +6,6 @@ import L from "leaflet";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
-// Etkinliğe ne kadar süre kaldığını hesaplayan yardımcı fonksiyon
 function getTimeRemaining(eventDateStr) {
   if (!eventDateStr) return { text: "Tarih Belirtilmedi", color: "text-slate-400 bg-slate-800/60 border-slate-700" };
   const eventTime = new Date(eventDateStr).getTime();
@@ -14,7 +13,7 @@ function getTimeRemaining(eventDateStr) {
   const diff = eventTime - now;
 
   if (diff <= 0) {
-    return { text: "Süresi Geçti ⌛", color: "text-rose-400 bg-rose-500/10 border-rose-500/30" };
+    return { text: "Tamamlandı 🏁", color: "text-rose-400 bg-rose-500/10 border-rose-500/30" };
   }
 
   const hours = Math.floor(diff / (1000 * 60 * 60));
@@ -29,15 +28,21 @@ function getTimeRemaining(eventDateStr) {
   }
 }
 
-export default function MapComponent({ groups = [], onSelectGroup }) {
+export default function MapComponent({ groups = [], onSelectGroup, externalSelectedGroup }) {
   const [isMounted, setIsMounted] = useState(false);
-  const [activeGroup, setActiveGroup] = useState(null);
+  const [activeGroup, setActiveGroup] = useState(externalSelectedGroup || null);
   const [memberProfiles, setMemberProfiles] = useState([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (externalSelectedGroup) {
+      handleMarkerClick(externalSelectedGroup);
+    }
+  }, [externalSelectedGroup]);
 
   const handleMarkerClick = async (group) => {
     setActiveGroup(group);
@@ -63,7 +68,6 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
     setLoadingMembers(false);
   };
 
-  // Etkinliği Paylaşma Fonksiyonu (Deep Link Destekli)
   const handleShareEvent = async (group) => {
     const shareUrl = `${window.location.origin}/dashboard?groupId=${group.id}`;
     const shareData = {
@@ -92,8 +96,8 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
     );
   }
 
-  const centerLat = groups[0]?.latitude || 40.9901;
-  const centerLng = groups[0]?.longitude || 29.0291;
+  const centerLat = activeGroup?.latitude || groups[0]?.latitude || 40.9901;
+  const centerLng = activeGroup?.longitude || groups[0]?.longitude || 29.0291;
 
   const createCustomIcon = (imageUrl) => {
     const fallbackImage = "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=100&q=80";
@@ -138,7 +142,14 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
         />
 
         {groups.map((g) => {
-          if (!g.latitude || !g.longitude || g.chatStatus === "Kapalı" || g.status === "Onay Bekliyor") return null;
+          const now = new Date().getTime();
+          const eventTime = g.eventDate ? new Date(g.eventDate).getTime() : 0;
+          const isExpired = eventTime > 0 && (now - eventTime) >= 24 * 60 * 60 * 1000;
+
+          // Onay bekleyen, sohbeti kapalı olan veya 24 saat süresi dolmuş etkinlikleri haritada gösterme
+          if (!g.latitude || !g.longitude || g.status === "Onay Bekliyor" || g.chatStatus === "Kapalı" || isExpired) {
+            return null;
+          }
 
           return (
             <Marker 
@@ -153,7 +164,7 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
         })}
       </MapContainer>
 
-      {/* PERFORMANS VE YENİ ÖZELLİK ENTEGRELİ BOTTOM SHEET */}
+      {/* BOTTOM SHEET */}
       {activeGroup && (() => {
         const timeRemaining = getTimeRemaining(activeGroup.eventDate);
 
@@ -167,10 +178,8 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
               style={{ willChange: "transform, opacity" }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Çekmece Çubuğu */}
               <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-1 opacity-70" />
 
-              {/* Üst Sağ Aksiyon Butonları (Paylaş & Kapat) */}
               <div className="absolute top-3 right-3 flex items-center space-x-1.5">
                 <button 
                   onClick={() => handleShareEvent(activeGroup)}
@@ -187,7 +196,6 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
                 </button>
               </div>
 
-              {/* Görsel ve Başlık Bilgisi */}
               <div className="flex space-x-3 items-center">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-slate-700 shadow-md">
                   <img 
@@ -201,7 +209,6 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
                     <span className="text-[8px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">
                       {activeGroup.category || "Genel"}
                     </span>
-                    {/* Canlı Süre Sayacı Rozeti */}
                     <span className={`text-[8px] font-bold px-2 py-0.5 rounded border ${timeRemaining.color}`}>
                       {timeRemaining.text}
                     </span>
@@ -211,7 +218,6 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
                 </div>
               </div>
 
-              {/* Tarih ve Katılımcı Detayları */}
               <div className="grid grid-cols-2 gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 text-[10px]">
                 <div>
                   <span className="text-slate-500 block text-[8px] font-medium">📅 Tarih</span>
@@ -225,7 +231,6 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
                 </div>
               </div>
 
-              {/* Katılımcı Avatarları */}
               <div className="space-y-1">
                 <span className="text-[9px] text-slate-400 font-semibold block">Katılımcılar:</span>
                 <div className="flex items-center space-x-1">
@@ -256,7 +261,6 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
                 </div>
               </div>
 
-              {/* Buton Grubu: Yol Tarifi & Sohbete Git */}
               <div className="flex space-x-2 pt-1">
                 {activeGroup.latitude && activeGroup.longitude && (
                   <a

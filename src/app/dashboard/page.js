@@ -61,14 +61,14 @@ function DashboardPageContent() {
   const [notifications, setNotifications] = useState([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
-  // Takipçi ve Takip Edilen State'leri
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
-  const [followModalType, setFollowModalType] = useState(null); // 'followers' | 'following' | null
+  const [followModalType, setFollowModalType] = useState(null);
   const [followUserList, setFollowUserList] = useState([]);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const [mapFocusedGroup, setMapFocusedGroup] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [sortByNearby, setSortByNearby] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,7 +81,7 @@ function DashboardPageContent() {
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const targetGroupId = searchParams.get("groupId"); // Paylaşılan linkten gelen groupId'yi yakalar
+  const targetGroupId = searchParams.get("groupId");
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -113,11 +113,9 @@ function DashboardPageContent() {
     return () => unsubscribeAuth();
   }, [router]);
 
-  // Bildirimleri, Takipçi ve Takip Edilen Sayılarını Canlı Dinleme
   useEffect(() => {
     if (!auth.currentUser) return;
 
-    // 1. Bildirimler
     const notifRef = collection(db, "users", auth.currentUser.uid, "notifications");
     const qNotifs = query(notifRef, orderBy("createdAt", "desc"));
     const unsubscribeNotifs = onSnapshot(qNotifs, (snapshot) => {
@@ -128,13 +126,11 @@ function DashboardPageContent() {
       setNotifications(list);
     });
 
-    // 2. Takipçiler Canlı Sayacı
     const followersRef = collection(db, "users", auth.currentUser.uid, "followers");
     const unsubscribeFollowers = onSnapshot(followersRef, (snapshot) => {
       setFollowersCount(snapshot.size);
     });
 
-    // 3. Takip Edilenler Canlı Sayacı
     const followingRef = collection(db, "users", auth.currentUser.uid, "following");
     const unsubscribeFollowing = onSnapshot(followingRef, (snapshot) => {
       setFollowingCount(snapshot.size);
@@ -154,11 +150,17 @@ function DashboardPageContent() {
         const data = docSnap.data();
         const eventTime = new Date(data.eventDate).getTime();
         const now = new Date().getTime();
-        const diffHours = (eventTime - now) / (1000 * 60 * 60);
+        const diffHours = (now - eventTime) / (1000 * 60 * 60);
 
-        if (diffHours <= 24 && diffHours > 0 && data.status === "Onay Bekliyor") {
+        const hoursToEvent = (eventTime - now) / (1000 * 60 * 60);
+        if (hoursToEvent <= 24 && hoursToEvent > 0 && data.status === "Onay Bekliyor") {
           updateDoc(doc(db, "groups", docSnap.id), { status: "Aktif" });
         }
+
+        if (diffHours >= 24 && data.chatStatus !== "Kapalı") {
+          updateDoc(doc(db, "groups", docSnap.id), { chatStatus: "Kapalı" });
+        }
+
         list.push({ id: docSnap.id, ...data });
       });
       setGroups(list);
@@ -190,7 +192,6 @@ function DashboardPageContent() {
     };
   }, []);
 
-  // Paylaşılan Etkinlik Linkine Tıklandığında Doğrudan Sohbet Modalını Açma
   useEffect(() => {
     if (targetGroupId && groups.length > 0) {
       const foundGroup = groups.find((g) => g.id === targetGroupId);
@@ -259,6 +260,8 @@ function DashboardPageContent() {
     })).sort((a, b) => a.distance - b.distance);
   }
 
+  const completedGroups = groups.filter(g => g.chatStatus === "Kapalı" || (new Date().getTime() - new Date(g.eventDate).getTime()) >= 24 * 60 * 60 * 1000);
+
   const myJoinedGroups = groups.filter(g => g.members?.includes(auth.currentUser.uid));
   const nowTime = new Date().getTime();
   const calendarEvents = groups.filter(g => {
@@ -270,16 +273,24 @@ function DashboardPageContent() {
 
   const userTitleInfo = getUserTitle(userData.messageCount || 0);
 
+  const firstName = userData.fullName ? userData.fullName.split(" ")[0] : "Gezgin";
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center overflow-hidden select-none">
       <div className="w-full max-w-md h-screen sm:h-[90vh] sm:max-h-[850px] bg-slate-950 sm:border sm:border-slate-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl relative">
         
-        {/* Header */}
-        <header className="h-14 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 flex justify-between items-center shrink-0 z-25 relative">
-          <h2 className="font-black text-indigo-400 text-sm tracking-wider cursor-pointer" onClick={() => setActiveTab("groups")}>TRIPBFF</h2>
+        {/* HEADER */}
+        <header className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 flex justify-between items-center shrink-0 z-25 relative">
+          <div className="flex flex-col cursor-pointer" onClick={() => setActiveTab("groups")}>
+            <h2 className="font-black text-indigo-400 text-sm tracking-wider">TRIPBFF</h2>
+            <span className="text-[10px] text-slate-300 font-semibold flex items-center gap-1">
+              <span>Hoş geldin,</span>
+              <span className="text-indigo-300 font-bold">{firstName}</span>
+              <span>👋</span>
+            </span>
+          </div>
           
           <div className="flex items-center space-x-2">
-            {/* BİLDİRİM ZİLİ BUTONU */}
             <button 
               type="button"
               onClick={() => setIsNotifOpen(!isNotifOpen)}
@@ -317,9 +328,9 @@ function DashboardPageContent() {
             </button>
           </div>
 
-          {/* BİLDİRİM AÇILIR PENCERESİ (DROPDOWN) */}
+          {/* BİLDİRİM DROPDOWN */}
           {isNotifOpen && (
-            <div className="absolute right-4 top-14 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 z-50 space-y-2 max-h-80 overflow-y-auto backdrop-blur-md">
+            <div className="absolute right-4 top-16 w-80 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-3 z-50 space-y-2 max-h-80 overflow-y-auto backdrop-blur-md">
               <div className="flex justify-between items-center border-b border-slate-800 pb-2">
                 <h4 className="font-bold text-xs text-indigo-300 flex items-center gap-1.5">
                   <span>🔔</span> Bildirimler
@@ -346,28 +357,20 @@ function DashboardPageContent() {
               ) : (
                 notifications.map((n) => (
                   <div key={n.id} className={`p-2.5 rounded-xl border text-[11px] space-y-1 relative group ${n.isRead ? 'bg-slate-950/40 border-slate-800/60 opacity-70' : 'bg-indigo-950/40 border-indigo-500/30'}`}>
-                    
                     <div className="flex justify-between items-start pr-4">
                       <span className="font-bold text-indigo-300 text-[10px]">{n.title}</span>
                       <span className="text-[8px] text-slate-500">
                         {n.createdAt ? new Date(n.createdAt.toDate()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                       </span>
                     </div>
-                    
                     <p className="text-slate-300 text-[10px] leading-relaxed pr-3">{n.message}</p>
-
-                    {/* Bireysel Silme (Çarpı) Butonu */}
                     <button 
-                      onClick={async () => {
-                        await deleteNotification(auth.currentUser.uid, n.id);
-                      }}
-                      title="Bildirimi Sil"
-                      className="absolute top-2 right-2 text-slate-500 hover:text-rose-400 text-xs p-0.5 transition opacity-60 hover:opacity-100"
+                      onClick={async () => { await deleteNotification(auth.currentUser.uid, n.id); }}
+                      className="absolute top-2 right-2 text-slate-500 hover:text-rose-400 text-xs p-0.5 transition"
                     >
                       ✕
                     </button>
 
-                    {/* Takip İsteği Aksiyon Butonları */}
                     {n.type === "follow_request" && !n.isRead && (
                       <div className="flex space-x-1.5 pt-1">
                         <button
@@ -380,45 +383,13 @@ function DashboardPageContent() {
                           Kabul Et ✓
                         </button>
                         <button
-                          onClick={async () => {
-                            await rejectFollowRequest(auth.currentUser.uid, n.id);
-                          }}
+                          onClick={async () => { await rejectFollowRequest(auth.currentUser.uid, n.id); }}
                           className="flex-1 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] font-semibold rounded-lg border border-slate-700 transition"
                         >
                           Reddet
                         </button>
                       </div>
                     )}
-
-                    {/* Geri Takip Aksiyonu */}
-                    {n.type === "follow_accepted" && (
-                      <div className="pt-1 flex items-center justify-between">
-                        <span className="text-[9px] text-emerald-400 font-bold">✓ Takipçiniz Oldu</span>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await sendFollowRequest(auth.currentUser, n.senderUid);
-                              await updateDoc(doc(db, "users", auth.currentUser.uid, "notifications", n.id), {
-                                type: "follow_handled"
-                              });
-                              alert("Takip isteği gönderildi!");
-                            } catch (err) {
-                              alert(err.message);
-                            }
-                          }}
-                          className="px-2 py-0.5 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 text-[8px] font-bold rounded border border-indigo-500/30 transition"
-                        >
-                          Sen de Geri Takip Et
-                        </button>
-                      </div>
-                    )}
-
-                    {n.type === "follow_handled" && (
-                      <div className="pt-1">
-                        <span className="text-[9px] text-indigo-300 font-bold">✓ Karşılıklı Takipleşiyorsunuz</span>
-                      </div>
-                    )}
-
                   </div>
                 ))
               )}
@@ -429,24 +400,28 @@ function DashboardPageContent() {
         {/* Main Content */}
         <main className="flex-grow relative overflow-y-auto flex flex-col pb-16">
           
-          {/* SEKME: GRUPLAR */}
+          {/* SEKME: AKTİF GRUPLAR */}
           {activeTab === "groups" && (
-            <div className="p-4 space-y-3">
-              <div className="bg-slate-900/60 border border-slate-800 p-3.5 rounded-2xl flex flex-col space-y-2.5 shadow-lg">
+            <div className="p-4 space-y-3.5 transition-all duration-300 ease-out">
+              
+              {/* CANLI BAŞLIK BANNER'I */}
+              <div className="bg-gradient-to-r from-indigo-900/40 via-slate-900 to-indigo-950/40 border border-indigo-500/30 p-4 rounded-2xl flex flex-col space-y-3 shadow-xl backdrop-blur-md relative overflow-hidden">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="font-bold text-xs text-slate-200">Etkinlik Grupları</h3>
-                    <p className="text-[10px] text-slate-400">Çevrendeki etkinliklere katıl</p>
+                    <h3 className="font-extrabold text-xs text-slate-100 flex items-center gap-1.5">
+                      <span>🔥 Etkinlik Grupları</span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Çevrendeki maceralara katıl veya yeni bir etkinlik başlat!</p>
                   </div>
                   <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-[10px] transition shadow-md shadow-indigo-600/30 cursor-pointer"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-xl text-[10px] transition shadow-lg shadow-indigo-600/40 flex items-center space-x-1 cursor-pointer hover:scale-105 transform duration-150"
                   >
-                    + Etkinlik Oluştur
+                    <span>+ Etkinlik Oluştur</span>
                   </button>
                 </div>
 
-                <div className="flex space-x-2 pt-1 border-t border-slate-800">
+                <div className="flex space-x-2 pt-1 border-t border-slate-800/80">
                   <button
                     onClick={() => {
                       if (!navigator.geolocation) return alert("Konum desteklenmiyor.");
@@ -456,7 +431,7 @@ function DashboardPageContent() {
                       );
                     }}
                     className={`flex-1 py-1.5 px-3 rounded-xl text-[10px] font-semibold transition border ${
-                      sortByNearby ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                      sortByNearby ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700'
                     }`}
                   >
                     📍 Yakınımdaki Etkinlikler
@@ -467,30 +442,50 @@ function DashboardPageContent() {
                 </div>
               </div>
 
+              {/* ETKİNLİK KARTLARI */}
               <div className="flex flex-col space-y-3">
                 {activeGroups.length === 0 ? (
-                  <p className="text-center text-xs text-slate-500 mt-6">Aktif etkinlik grubu bulunmuyor.</p>
+                  <div className="text-center py-10 space-y-2">
+                    <span className="text-2xl block">🎉</span>
+                    <p className="text-xs text-slate-400 font-medium">Şu an aktif etkinlik bulunmuyor.</p>
+                    <p className="text-[10px] text-slate-500">İlk etkinliği sen oluşturmaya ne dersin?</p>
+                  </div>
                 ) : (
-                  activeGroups.map(g => (
+                  activeGroups.map((g) => (
                     <div 
                       key={g.id} 
                       onClick={() => setSelectedGroup(g)}
-                      className="bg-slate-800/50 border border-slate-800 rounded-xl p-3.5 space-y-2 cursor-pointer hover:border-indigo-500/50 transition"
+                      className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 rounded-2xl p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-md hover:shadow-indigo-500/10 group"
                     >
-                      {g.imageUrl && <div className="w-full h-32 overflow-hidden rounded-lg mb-1"><img src={g.imageUrl} className="w-full h-full object-cover" /></div>}
+                      {g.imageUrl && (
+                        <div className="w-full h-32 overflow-hidden rounded-xl mb-1 relative border border-slate-800">
+                          <img src={g.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                          <span className="absolute top-2 right-2 text-[9px] font-bold bg-slate-950/80 backdrop-blur-md text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                            {g.category || "Genel"}
+                          </span>
+                        </div>
+                      )}
+                      
                       <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-indigo-300 text-xs">{g.title}</h4>
-                        <div className="flex items-center space-x-1">
+                        <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-xs transition">{g.title}</h4>
+                        <div className="flex items-center space-x-1 shrink-0 ml-2">
                           {g.distance !== undefined && (
-                            <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">~{g.distance.toFixed(1)} km</span>
+                            <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-md border border-indigo-500/30">~{g.distance.toFixed(1)} km</span>
                           )}
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">Aktif</span>
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/30 font-semibold">Aktif</span>
                         </div>
                       </div>
-                      <p className="text-[11px] text-slate-300">{g.desc}</p>
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-700/40">
-                        <span>👤 {g.memberCount || 1} Katılımcı</span>
-                        <span className="text-indigo-400 font-semibold">{g.category}</span>
+
+                      <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">{g.desc}</p>
+
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+                        <span className="flex items-center space-x-1 font-medium">
+                          <span>👤</span>
+                          <span className="text-slate-200 font-bold">{g.memberCount || 1} Katılımcı</span>
+                        </span>
+                        <span className="text-indigo-400 font-bold group-hover:translate-x-1 transition duration-150 flex items-center gap-1">
+                          Sohbete Git →
+                        </span>
                       </div>
                     </div>
                   ))
@@ -504,8 +499,41 @@ function DashboardPageContent() {
             <div className="h-full w-full absolute inset-0 z-10">
               <MapComponent 
                 groups={groups} 
-                onSelectGroup={(g) => setSelectedGroup(g)} 
+                onSelectGroup={(g) => setSelectedGroup(g)}
+                externalSelectedGroup={mapFocusedGroup}
               />
+            </div>
+          )}
+
+          {/* SEKME: TAMAMLANAN ETKİNLİKLER */}
+          {activeTab === "completed" && (
+            <div className="p-4 space-y-3">
+              <div className="mb-2">
+                <h3 className="font-bold text-sm text-slate-100">Tamamlanan Etkinlikler 🏁</h3>
+                <p className="text-[10px] text-slate-400">Süresi dolmuş veya sonlanmış geçmiş etkinlikler</p>
+              </div>
+
+              {completedGroups.length === 0 ? (
+                <p className="text-center text-xs text-slate-500 mt-8">Henüz tamamlanan bir etkinlik bulunmuyor.</p>
+              ) : (
+                completedGroups.map(g => (
+                  <div 
+                    key={g.id} 
+                    onClick={() => setSelectedGroup(g)}
+                    className="bg-slate-900/60 border border-slate-800 rounded-xl p-3.5 space-y-2 opacity-75 hover:opacity-100 cursor-pointer transition"
+                  >
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-bold text-slate-300 text-xs line-through">{g.title}</h4>
+                      <span className="text-[9px] bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full border border-rose-500/30 font-semibold">🏁 Tamamlandı</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 line-clamp-2">{g.desc}</p>
+                    <div className="flex justify-between items-center text-[9px] text-slate-500 pt-1 border-t border-slate-800">
+                      <span>👤 {g.memberCount || 1} Katılımcı</span>
+                      <span>📅 {g.eventDate ? new Date(g.eventDate).toLocaleDateString('tr-TR') : 'Tarih Yok'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -567,7 +595,6 @@ function DashboardPageContent() {
           {activeTab === "admin" && isAdmin && (
             <div className="p-4 space-y-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
-                
                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                   <h3 className="font-bold text-xs text-amber-400">Moderatör Yönetim Paneli</h3>
                   <button onClick={() => setActiveTab("groups")} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition">Kapat</button>
@@ -586,18 +613,6 @@ function DashboardPageContent() {
                   >
                     Grup Onayları
                   </button>
-                  <button 
-                    onClick={() => setAdminSubTab("reports")}
-                    className={`py-1.5 rounded-lg text-[10px] font-semibold transition ${adminSubTab === 'reports' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    Şikayetler
-                  </button>
-                  <button 
-                    onClick={() => setAdminSubTab("all_groups")}
-                    className={`py-1.5 rounded-lg text-[10px] font-semibold transition ${adminSubTab === 'all_groups' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    Tüm Gruplar
-                  </button>
                 </div>
 
                 {adminSubTab === "user_approvals" && (
@@ -611,9 +626,6 @@ function DashboardPageContent() {
                           <div>
                             <h5 className="font-bold text-xs text-slate-100">{u.fullName} ({u.age})</h5>
                             <p className="text-[10px] text-slate-400">{u.email}</p>
-                            <a href={`https://instagram.com/${u.instagram}`} target="_blank" rel="noopener noreferrer" className="text-[11px] text-indigo-400 font-bold hover:underline block mt-1">
-                              📸 Instagram: @{u.instagram || "Belirtilmemiş"}
-                            </a>
                           </div>
                           <div className="flex space-x-2 pt-1">
                             <button onClick={() => handleApproveUser(u.id)} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg text-[10px] font-semibold">Onayla ✓</button>
@@ -624,70 +636,16 @@ function DashboardPageContent() {
                     )}
                   </div>
                 )}
-
-                {adminSubTab === "groups_approval" && (
-                  <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-                    <h4 className="font-bold text-[11px] text-indigo-300">Onay Bekleyen Etkinlikler ({pendingGroupsCount})</h4>
-                    {groups.filter(g => g.status === "Onay Bekliyor").length === 0 ? (
-                      <p className="text-[10px] text-slate-500">Onay bekleyen etkinlik yok.</p>
-                    ) : (
-                      groups.filter(g => g.status === "Onay Bekliyor").map(g => (
-                        <div key={g.id} className="bg-slate-800/50 border border-amber-500/30 rounded-xl p-3 space-y-2">
-                          <h5 className="font-bold text-xs text-slate-100">{g.title}</h5>
-                          <div className="flex space-x-2 pt-1">
-                            <button onClick={async () => { await updateDoc(doc(db, "groups", g.id), { status: "Aktif" }); alert("Onaylandı!"); }} className="flex-1 bg-emerald-600 text-white py-1 rounded-lg text-[10px]">Onayla</button>
-                            <button onClick={async () => { await deleteDoc(doc(db, "groups", g.id)); alert("Reddedildi."); }} className="flex-1 bg-rose-600 text-white py-1 rounded-lg text-[10px]">Reddet</button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {adminSubTab === "reports" && (
-                  <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-                    <h4 className="font-bold text-[11px] text-rose-400">Şikayetler ({pendingReportsCount})</h4>
-                    {reports.map(r => (
-                      <div key={r.id} className="bg-slate-800/50 border border-rose-500/30 rounded-xl p-3 space-y-2">
-                        <p className="text-[10px] text-rose-300">"{r.messageText}"</p>
-                        <button onClick={async () => { if(r.reportedUserId) await updateDoc(doc(db, "users", r.reportedUserId), { banned: true }); await deleteDoc(doc(db, "reports", r.id)); alert("Banlandı."); }} className="w-full bg-rose-600 text-white py-1 rounded-lg text-[10px]">Kullanıcıyı Banla 🚫</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {adminSubTab === "all_groups" && (
-                  <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-                    <h4 className="font-bold text-[11px] text-indigo-300">Grup ve Sohbet Kontrolleri</h4>
-                    {groups.map(g => {
-                      const isClosed = g.chatStatus === "Kapalı";
-                      return (
-                        <div key={g.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="font-bold text-xs text-slate-100">{g.title}</span>
-                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${isClosed ? 'bg-rose-500/20 text-rose-400' : 'bg-emerald-500/20 text-emerald-400'}`}>({isClosed ? "Kapalı" : "Açık"})</span>
-                          </div>
-                          <button 
-                            onClick={async () => { await updateDoc(doc(db, "groups", g.id), { chatStatus: isClosed ? "Açık" : "Kapalı" }); }}
-                            className={`w-full py-2 rounded-xl text-xs font-bold transition ${isClosed ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}
-                          >
-                            {isClosed ? "Grubu / Chat'i Aç" : "Grubu / Chat'i Kapat"}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
               </div>
             </div>
           )}
 
-          {/* SEKME: PROFİL */}
+          {/* SEKME: PROFİL (DÜZENLENDİ: YUKARIYA 'PROFİLİ DÜZENLE', AŞAĞIYA 'KATILDIĞIM GRUPLAR') */}
           {activeTab === "profile" && (
-            <div className="p-4 space-y-4">
-              <div className="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex flex-col items-center text-center shadow-lg space-y-3">
-                <div className="w-20 h-20 rounded-full bg-indigo-600/30 border-2 border-indigo-500/50 flex items-center justify-center text-indigo-300 font-bold text-xl overflow-hidden">
+            <div className="p-3.5 space-y-3">
+              {/* KULLANICI BİLGİ KARTI (KOMPAKT) */}
+              <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-2xl flex flex-col items-center text-center shadow-lg space-y-2">
+                <div className="w-16 h-16 rounded-full bg-indigo-600/30 border-2 border-indigo-500/50 flex items-center justify-center text-indigo-300 font-bold text-lg overflow-hidden shrink-0">
                   {userData.photoUrl ? (
                     <img src={userData.photoUrl} alt="Profil" className="w-full h-full object-cover" />
                   ) : (
@@ -695,24 +653,23 @@ function DashboardPageContent() {
                   )}
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-100">{userData.fullName} ({userData.age})</h3>
-                  <p className="text-[10px] text-indigo-400 font-semibold mt-0.5">{userTitleInfo.title}</p>
-                  <p className="text-[11px] text-slate-400">{userData.email}</p>
+                  <h3 className="font-bold text-xs text-slate-100">{userData.fullName} ({userData.age})</h3>
+                  <p className="text-[9px] text-indigo-400 font-semibold mt-0.5">{userTitleInfo.title}</p>
+                  <p className="text-[10px] text-slate-400">{userData.email}</p>
                 </div>
-                <p className="text-[11px] text-slate-300 italic">{userData.bio || "Biyografi yok."}</p>
+                {userData.bio && <p className="text-[10px] text-slate-300 italic px-2">{userData.bio}</p>}
 
-                {/* TAKİPÇİ & TAKİP EDİLEN BUTONLARI */}
-                <div className="flex space-x-3 w-full pt-1 border-t border-slate-800/80">
+                <div className="flex space-x-2 w-full pt-1.5 border-t border-slate-800/80">
                   <button
                     onClick={async () => {
                       const list = await getFollowersList(auth.currentUser.uid);
                       setFollowUserList(list);
                       setFollowModalType("followers");
                     }}
-                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700 text-center transition cursor-pointer"
+                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700/80 text-center transition cursor-pointer"
                   >
                     <span className="block text-xs font-bold text-indigo-400">{followersCount}</span>
-                    <span className="text-[10px] text-slate-400">Takipçi</span>
+                    <span className="text-[9px] text-slate-400">Takipçi</span>
                   </button>
 
                   <button
@@ -721,94 +678,101 @@ function DashboardPageContent() {
                       setFollowUserList(list);
                       setFollowModalType("following");
                     }}
-                    className="flex-1 py-2 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700 text-center transition cursor-pointer"
+                    className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700/80 rounded-xl border border-slate-700/80 text-center transition cursor-pointer"
                   >
                     <span className="block text-xs font-bold text-indigo-400">{followingCount}</span>
-                    <span className="text-[10px] text-slate-400">Takip Edilen</span>
+                    <span className="text-[9px] text-slate-400">Takip Edilen</span>
                   </button>
                 </div>
               </div>
 
-              <form onSubmit={handleUpdateProfile} className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl space-y-3 shadow-lg">
+              {/* 1. PROFİLİ DÜZENLE FORMU (YUKARI TAŞINDI & BOYUTU KÜÇÜLTÜLDÜ) */}
+              <form onSubmit={handleUpdateProfile} className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl space-y-2.5 shadow-md">
                 <h4 className="font-bold text-xs text-indigo-400">Profili Düzenle</h4>
                 <div className="flex flex-col space-y-1">
-                  <label className="text-[10px] text-slate-400">Profil Fotoğrafı</label>
-                  <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="text-[10px] text-slate-400 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:bg-indigo-600 file:text-white cursor-pointer" />
+                  <label className="text-[9px] text-slate-400">Profil Fotoğrafı Değiştir</label>
+                  <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="text-[9px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[9px] file:bg-indigo-600 file:text-white cursor-pointer" />
                 </div>
                 <div className="flex flex-col space-y-1">
-                  <label className="text-[10px] text-slate-400">Biyografi</label>
-                  <textarea rows="2" value={bio} onChange={(e) => setBio(e.target.value)} className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 resize-none" />
+                  <label className="text-[9px] text-slate-400">Biyografi</label>
+                  <textarea rows="2" value={bio} onChange={(e) => setBio(e.target.value)} className="bg-slate-800 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500 resize-none" />
                 </div>
                 <div className="flex flex-col space-y-1">
-                  <label className="text-[10px] text-slate-400">Instagram Kullanıcı Adı</label>
-                  <input type="text" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="örn: kullanıcı_adı" className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
+                  <label className="text-[9px] text-slate-400">Instagram Kullanıcı Adı</label>
+                  <input type="text" value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="örn: kullanıcı_adı" className="bg-slate-800 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-200 focus:outline-none focus:border-indigo-500" />
                 </div>
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-slate-300">Instagram adresim kişi kartında görünsün</span>
-                  <input type="checkbox" checked={showInsta} onChange={(e) => setShowInsta(e.target.checked)} className="w-4 h-4 accent-indigo-600 rounded cursor-pointer" />
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="text-[9px] text-slate-300">Instagram adresim görünsün</span>
+                  <input type="checkbox" checked={showInsta} onChange={(e) => setShowInsta(e.target.checked)} className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer" />
                 </div>
-                <button type="submit" disabled={updatingProfile} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 rounded-xl text-xs transition shadow-md shadow-indigo-600/30">
+                <button type="submit" disabled={updatingProfile} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-1.5 rounded-xl text-xs transition shadow-md shadow-indigo-600/30">
                   {updatingProfile ? "Kaydediliyor..." : "Değişiklikleri Kaydet"}
                 </button>
               </form>
 
-              <div className="space-y-2">
+              {/* 2. KATILDIĞIM GRUPLAR / AKTİF ETKİNLİKLERİM (AŞAĞI TAŞINDI & BOYUTU KÜÇÜLTÜLDÜ) */}
+              <div className="space-y-2 pt-1">
                 <h4 className="font-bold text-xs text-indigo-300">Katıldığım Gruplar ({myJoinedGroups.length})</h4>
                 {myJoinedGroups.length === 0 ? (
-                  <p className="text-[11px] text-slate-500">Henüz katıldığın bir etkinlik grubu yok.</p>
+                  <p className="text-[10px] text-slate-500 italic">Henüz katıldığın bir etkinlik grubu yok.</p>
                 ) : (
                   myJoinedGroups.map(g => (
                     <div 
                       key={g.id}
                       onClick={() => setSelectedGroup(g)}
-                      className="bg-slate-800/50 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between cursor-pointer hover:border-indigo-500/50 transition"
+                      className="bg-slate-900/70 border border-slate-800 hover:border-indigo-500/50 rounded-xl p-2 flex items-center justify-between cursor-pointer transition shadow-sm"
                     >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-700 shrink-0 border border-slate-600">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-800 shrink-0 border border-slate-700 flex items-center justify-center">
                           {g.imageUrl ? (
                             <img src={g.imageUrl} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-indigo-300">
+                            <span className="text-[10px] font-bold text-indigo-300">
                               {g.title.charAt(0).toUpperCase()}
-                            </div>
+                            </span>
                           )}
                         </div>
                         <div>
-                          <h5 className="font-bold text-xs text-slate-100">{g.title}</h5>
-                          <p className="text-[9px] text-slate-400">{g.category} • 👤 {g.memberCount || 1}</p>
+                          <h5 className="font-bold text-[11px] text-slate-100 line-clamp-1">{g.title}</h5>
+                          <p className="text-[8px] text-slate-400">{g.category} • 👤 {g.memberCount || 1}</p>
                         </div>
                       </div>
-                      <span className="text-[10px] text-indigo-400 font-bold">Sohbet →</span>
+                      <span className="text-[9px] text-indigo-400 font-bold shrink-0 ml-2">Sohbet →</span>
                     </div>
                   ))
                 )}
               </div>
+
             </div>
           )}
 
         </main>
 
-        {/* Bottom Nav */}
-        <nav className="h-16 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 flex justify-around items-center shrink-0 z-20 absolute bottom-0 left-0 right-0">
-          <button onClick={() => setActiveTab("groups")} className={`flex flex-col items-center justify-center flex-grow py-1 transition ${activeTab === 'groups' ? 'text-indigo-400' : 'text-slate-400'}`}>
+        {/* 5 ELEMANLI BOTTOM NAV BAR */}
+        <nav className="h-16 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 grid grid-cols-5 items-center shrink-0 z-20 absolute bottom-0 left-0 right-0">
+          <button onClick={() => setActiveTab("groups")} className={`flex flex-col items-center justify-center py-1 transition ${activeTab === 'groups' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
             <span className="text-base">💬</span>
-            <span className="text-[10px] mt-0.5 font-medium">Gruplar</span>
+            <span className="text-[8px] mt-0.5 font-medium">Gruplar</span>
           </button>
-          <button onClick={() => setActiveTab("map")} className={`flex flex-col items-center justify-center flex-grow py-1 transition ${activeTab === 'map' ? 'text-indigo-400' : 'text-slate-400'}`}>
+          <button onClick={() => setActiveTab("map")} className={`flex flex-col items-center justify-center py-1 transition ${activeTab === 'map' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
             <span className="text-base">🗺️</span>
-            <span className="text-[10px] mt-0.5 font-medium">Harita</span>
+            <span className="text-[8px] mt-0.5 font-medium">Harita</span>
           </button>
-          <button onClick={() => setActiveTab("calendar")} className={`flex flex-col items-center justify-center flex-grow py-1 transition ${activeTab === 'calendar' ? 'text-indigo-400' : 'text-slate-400'}`}>
+          <button onClick={() => setActiveTab("completed")} className={`flex flex-col items-center justify-center py-1 transition ${activeTab === 'completed' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
+            <span className="text-base">🏁</span>
+            <span className="text-[8px] mt-0.5 font-medium">Bitenler</span>
+          </button>
+          <button onClick={() => setActiveTab("calendar")} className={`flex flex-col items-center justify-center py-1 transition ${activeTab === 'calendar' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
             <span className="text-base">📅</span>
-            <span className="text-[10px] mt-0.5 font-medium">Takvim</span>
+            <span className="text-[8px] mt-0.5 font-medium">Takvim</span>
           </button>
-          <button onClick={() => setActiveTab("profile")} className={`flex flex-col items-center justify-center flex-grow py-1 transition ${activeTab === 'profile' ? 'text-indigo-400' : 'text-slate-400'}`}>
+          <button onClick={() => setActiveTab("profile")} className={`flex flex-col items-center justify-center py-1 transition ${activeTab === 'profile' ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}>
             <span className="text-base">⚙️</span>
-            <span className="text-[10px] mt-0.5 font-medium">Profil</span>
+            <span className="text-[8px] mt-0.5 font-medium">Profil</span>
           </button>
         </nav>
 
-        {/* TAKİPÇİ / TAKİP EDİLEN LİSTE MODALI */}
+        {/* MODALLAR */}
         {followModalType && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-4 flex flex-col space-y-3 shadow-2xl max-h-96 overflow-y-auto">
@@ -823,18 +787,13 @@ function DashboardPageContent() {
                 <p className="text-center text-[10px] text-slate-500 py-4">Kullanıcı bulunamadı.</p>
               ) : (
                 followUserList.map((u) => (
-                  <div 
-                    key={u.id}
-                    className="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 transition"
-                  >
-                    <div className="flex items-center space-x-2.5">
-                      <div className="w-8 h-8 rounded-full bg-indigo-600/30 overflow-hidden shrink-0 border border-indigo-500/30 flex items-center justify-center text-xs font-bold text-indigo-300">
-                        {u.photoUrl ? <img src={u.photoUrl} className="w-full h-full object-cover" /> : u.fullName?.charAt(0)}
-                      </div>
-                      <div>
-                        <h5 className="font-bold text-xs text-slate-100">{u.fullName}</h5>
-                        <p className="text-[9px] text-indigo-400">{getUserTitle(u.messageCount || 0).title}</p>
-                      </div>
+                  <div key={u.id} className="flex items-center space-x-2.5 p-2 rounded-xl bg-slate-800/50 border border-slate-700/50">
+                    <div className="w-8 h-8 rounded-full bg-indigo-600/30 overflow-hidden shrink-0 border border-indigo-500/30 flex items-center justify-center text-xs font-bold text-indigo-300">
+                      {u.photoUrl ? <img src={u.photoUrl} className="w-full h-full object-cover" /> : u.fullName?.charAt(0)}
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-xs text-slate-100">{u.fullName}</h5>
+                      <p className="text-[9px] text-indigo-400">{getUserTitle(u.messageCount || 0).title}</p>
                     </div>
                   </div>
                 ))
@@ -848,7 +807,12 @@ function DashboardPageContent() {
           <ChatModal 
             group={selectedGroup} 
             onClose={() => setSelectedGroup(null)} 
-            onSwitchGroup={(newGroup) => setSelectedGroup(newGroup)} 
+            onSwitchGroup={(newGroup) => setSelectedGroup(newGroup)}
+            onShowOnMap={(groupToMap) => {
+              setSelectedGroup(null);
+              setMapFocusedGroup(groupToMap);
+              setActiveTab("map");
+            }}
           />
         )}
       </div>
