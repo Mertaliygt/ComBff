@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, collection, onSnapshot, deleteDoc, arrayUnion, query, orderBy } from "firebase/firestore";
 import { signOut, onAuthStateChanged } from "firebase/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import ChatModal from "@/components/ChatModal";
@@ -51,7 +51,7 @@ function formatEventDate(dateString) {
   };
 }
 
-export default function DashboardPage() {
+function DashboardPageContent() {
   const [userData, setUserData] = useState(null);
   const [activeTab, setActiveTab] = useState("groups");
   const [adminSubTab, setAdminSubTab] = useState("user_approvals");
@@ -80,6 +80,8 @@ export default function DashboardPage() {
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetGroupId = searchParams.get("groupId"); // Paylaşılan linkten gelen groupId'yi yakalar
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -188,6 +190,16 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // Paylaşılan Etkinlik Linkine Tıklandığında Doğrudan Sohbet Modalını Açma
+  useEffect(() => {
+    if (targetGroupId && groups.length > 0) {
+      const foundGroup = groups.find((g) => g.id === targetGroupId);
+      if (foundGroup) {
+        setSelectedGroup(foundGroup);
+      }
+    }
+  }, [targetGroupId, groups]);
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setUpdatingProfile(true);
@@ -259,7 +271,7 @@ export default function DashboardPage() {
   const userTitleInfo = getUserTitle(userData.messageCount || 0);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center overflow-hidden select-none">
       <div className="w-full max-w-md h-screen sm:h-[90vh] sm:max-h-[850px] bg-slate-950 sm:border sm:border-slate-800 sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl relative">
         
         {/* Header */}
@@ -428,7 +440,7 @@ export default function DashboardPage() {
                   </div>
                   <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-[10px] transition shadow-md shadow-indigo-600/30"
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-xl text-[10px] transition shadow-md shadow-indigo-600/30 cursor-pointer"
                   >
                     + Etkinlik Oluştur
                   </button>
@@ -488,14 +500,14 @@ export default function DashboardPage() {
           )}
 
           {/* SEKME: HARİTA */}
-{activeTab === "map" && (
-  <div className="h-full w-full absolute inset-0 z-10">
-    <MapComponent 
-      groups={groups} 
-      onSelectGroup={(g) => setSelectedGroup(g)} 
-    />
-  </div>
-)}
+          {activeTab === "map" && (
+            <div className="h-full w-full absolute inset-0 z-10">
+              <MapComponent 
+                groups={groups} 
+                onSelectGroup={(g) => setSelectedGroup(g)} 
+              />
+            </div>
+          )}
 
           {/* SEKME: TAKVİM */}
           {activeTab === "calendar" && (
@@ -832,14 +844,22 @@ export default function DashboardPage() {
         )}
 
         {isCreateModalOpen && <CreateGroupModal onClose={() => setIsCreateModalOpen(false)} />}
-{selectedGroup && (
-  <ChatModal 
-    group={selectedGroup} 
-    onClose={() => setSelectedGroup(null)} 
-    onSwitchGroup={(newGroup) => setSelectedGroup(newGroup)} 
-  />
-)}
+        {selectedGroup && (
+          <ChatModal 
+            group={selectedGroup} 
+            onClose={() => setSelectedGroup(null)} 
+            onSwitchGroup={(newGroup) => setSelectedGroup(newGroup)} 
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-xs">Yükleniyor...</div>}>
+      <DashboardPageContent />
+    </Suspense>
   );
 }
