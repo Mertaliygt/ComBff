@@ -20,7 +20,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Etkinlik başlangıç saatinin üzerinden 15 dakika geçip geçmediğini kontrol eder
   const checkCanUploadPhoto = () => {
     if (!group.eventDate) return false;
     const eventTime = new Date(group.eventDate).getTime();
@@ -34,7 +33,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
       alert("Etkinlik tamamlandıktan 15 dk sonra paylaşıma açılacaktır.");
       return;
     }
-    // 15 dakika geçtiyse gizli dosya girdisini tetikle
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -148,7 +146,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         photoUrl: photoBase64,
         uploaderUid: auth.currentUser.uid,
         uploaderName: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Gezgin",
-        status: "pending", // Moderatör onayına düşer
+        status: "pending",
         createdAt: new Date()
       });
       alert("Buluşma fotoğrafı moderatör onayına gönderildi! Onaylandıktan sonra Anılar kısmında görünür.");
@@ -328,14 +326,13 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
           )}
         </div>
 
-        {/* Mesaj Formu veya Kapalı Uyarısı */}
+        {/* Form veya Kapalı Alan */}
         {isChatClosed ? (
           <div className="p-3 bg-rose-950/40 border-t border-rose-900/50 text-center text-[11px] text-rose-400 shrink-0 font-semibold">
             🚫 Bu grubun sohbeti moderatör tarafından kapatılmıştır.
           </div>
         ) : isMember ? (
           <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex items-center space-x-2 shrink-0">
-            {/* Fotoğraf ikonu her zaman tıklanabilir, zamanı gelmediyse uyarı verir */}
             <button
               type="button"
               onClick={handlePhotoIconClick}
@@ -386,7 +383,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
               </div>
               <p className="text-[11px] text-slate-300 italic bg-slate-800/50 p-2 rounded-xl w-full">{selectedUserForProfile.bio || "Biyografi yok."}</p>
 
-              {/* Takip Et Butonu */}
               {selectedUserForProfile.uid && selectedUserForProfile.uid !== auth.currentUser?.uid && (
                 <div className="w-full">
                   {followStatus === "following" ? (
@@ -408,7 +404,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
                 </div>
               )}
 
-              {/* Katıldığı Etkinlikler Listesi */}
               <div className="w-full text-left space-y-1.5 pt-1 border-t border-slate-800">
                 <span className="text-[10px] text-indigo-300 font-bold block">
                   Katıldığı Etkinlikler ({userJoinedGroups.length})
@@ -434,7 +429,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
                 )}
               </div>
 
-              {/* Instagram Gizlilik Kontrolü */}
               {selectedUserForProfile.showInsta !== false && selectedUserForProfile.instagram && (
                 <a 
                   href={`https://instagram.com/${selectedUserForProfile.instagram}`} 
@@ -457,8 +451,8 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
             <div className="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-5 flex flex-col shadow-2xl space-y-3">
               <h4 className="font-bold text-xs text-rose-400">Mesajı Şikayet Et</h4>
               <p className="text-[10px] text-slate-300 bg-slate-800 p-2.5 rounded-xl italic">"{selectedMessageForReport.text}"</p>
-              <button onClick={handleReportMessage} className="w-full bg-rose-600 text-white text-xs py-2 rounded-xl font-semibold">Şikayet Et</button>
-              <button onClick={() => setSelectedMessageForReport(null)} className="w-full bg-slate-800 text-slate-300 text-xs py-2 rounded-xl font-semibold">İptal</button>
+              <button onClick={handleReportMessage} className="w-full bg-rose-600 text-white text-xs py-2 rounded-xl font-semibold cursor-pointer">Şikayet Et</button>
+              <button onClick={() => setSelectedMessageForReport(null)} className="w-full bg-slate-800 text-slate-300 text-xs py-2 rounded-xl font-semibold cursor-pointer">İptal</button>
             </div>
           </div>
         )}
