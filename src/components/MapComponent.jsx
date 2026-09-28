@@ -63,12 +63,13 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
     setLoadingMembers(false);
   };
 
-  // Etkinliği Paylaşma Fonksiyonu
+  // Etkinliği Paylaşma Fonksiyonu (Deep Link Destekli)
   const handleShareEvent = async (group) => {
+    const shareUrl = `${window.location.origin}/dashboard?groupId=${group.id}`;
     const shareData = {
       title: `TripBFF: ${group.title}`,
       text: `${group.title} etkinliğine davetlisin! TripBFF'te birlikte katılalım: ${group.desc}`,
-      url: window.location.href,
+      url: shareUrl,
     };
 
     if (navigator.share) {
@@ -78,8 +79,8 @@ export default function MapComponent({ groups = [], onSelectGroup }) {
         console.log("Paylaşım iptal edildi:", err);
       }
     } else {
-      navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}`);
-      alert("Etkinlik bilgileri panoya kopyalandı!");
+      navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareUrl}`);
+      alert("Etkinlik davet linki panoya kopyalandı!");
     }
   };
 
