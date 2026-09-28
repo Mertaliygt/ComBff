@@ -4,28 +4,48 @@ import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
 import { getUserTitle } from "@/app/dashboard/page";
 import { sendFollowRequest } from "@/lib/followService";
+import { resizeAndConvertImage } from "@/utils/imageHelper";
 
-export default function ChatModal({ group, onClose, onSwitchGroup }) {
+export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isMember, setIsMember] = useState(group.members?.includes(auth.currentUser.uid));
+  const [isMember, setIsMember] = useState(group.members?.includes(auth.currentUser?.uid));
   const [selectedUserForProfile, setSelectedUserForProfile] = useState(null);
   const [userJoinedGroups, setUserJoinedGroups] = useState([]);
-  const [followStatus, setFollowStatus] = useState("none"); // "none", "requested", "following"
+  const [followStatus, setFollowStatus] = useState("none");
   const [selectedMessageForReport, setSelectedMessageForReport] = useState(null);
   const [isChatClosed, setIsChatClosed] = useState(group.chatStatus === "Kapalı");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   
-  // Mesaj kapsayıcısı için ref
   const chatContainerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Doğrudan Kapsayıcıyı En Aşağıya Kaydıran Fonksiyon
+  // Etkinlik başlangıç saatinin üzerinden 15 dakika geçip geçmediğini kontrol eder
+  const checkCanUploadPhoto = () => {
+    if (!group.eventDate) return false;
+    const eventTime = new Date(group.eventDate).getTime();
+    const now = new Date().getTime();
+    const fifteenMinutes = 15 * 60 * 1000;
+    return (now - eventTime) >= fifteenMinutes;
+  };
+
+  const handlePhotoIconClick = () => {
+    if (!checkCanUploadPhoto()) {
+      alert("Etkinlik tamamlandıktan 15 dk sonra paylaşıma açılacaktır.");
+      return;
+    }
+    // 15 dakika geçtiyse gizli dosya girdisini tetikle
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   };
 
-  // Mesajlar her güncellendiğinde en aşağı kaydır (Görsel ve DOM oturma payı için 150ms gecikmeli)
   useEffect(() => {
     const timer = setTimeout(() => {
       scrollToBottom();
@@ -56,7 +76,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
     };
   }, [group.id]);
 
-  // Kullanıcının Katıldığı Etkinlik Gruplarını Çeken Fonksiyon
   const fetchUserJoinedGroups = async (targetUid) => {
     try {
       const querySnapshot = await getDocs(collection(db, "groups"));
@@ -78,7 +97,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
     }
   };
 
-  // Kişi Kartını Açma
   const openUserProfile = async (messageUser) => {
     try {
       const targetUid = messageUser.senderId;
@@ -114,6 +132,30 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
       }
     } catch (err) {
       console.error("Profil alınamadı:", err);
+    }
+  };
+
+  const handleUploadEventPhoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+
+    try {
+      const photoBase64 = await resizeAndConvertImage(file, 600, 600, 0.7);
+      await addDoc(collection(db, "event_photos"), {
+        groupId: group.id,
+        groupTitle: group.title,
+        photoUrl: photoBase64,
+        uploaderUid: auth.currentUser.uid,
+        uploaderName: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Gezgin",
+        status: "pending", // Moderatör onayına düşer
+        createdAt: new Date()
+      });
+      alert("Buluşma fotoğrafı moderatör onayına gönderildi! Onaylandıktan sonra Anılar kısmında görünür.");
+    } catch (err) {
+      alert("Fotoğraf yükleme hatası: " + err.message);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -214,7 +256,17 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
             <h3 className="font-bold text-xs text-indigo-400">{group.title} {isChatClosed && <span className="text-rose-500 font-bold">(KAPALI)</span>}</h3>
             <p className="text-[10px] text-slate-400">📅 {formattedDate} • 👤 {group.memberCount || 1} Katılımcı</p>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5">
+            {group.latitude && group.longitude && onShowOnMap && (
+              <button
+                onClick={() => onShowOnMap(group)}
+                className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-xl text-[9px] font-bold transition cursor-pointer flex items-center space-x-1"
+                title="Haritada Göster"
+              >
+                <span>🗺️ Harita</span>
+              </button>
+            )}
+
             <button
               onClick={handleToggleJoin}
               className={`px-3 py-1 rounded-xl text-[10px] font-semibold transition cursor-pointer ${
@@ -241,7 +293,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
           <p className="text-[11px] text-slate-300">{group.desc}</p>
         </div>
 
-        {/* Mesaj Akışı (chatContainerRef Eklendi) */}
+        {/* Mesaj Akışı */}
         <div 
           ref={chatContainerRef} 
           className="flex-grow p-3 overflow-y-auto space-y-2.5 flex flex-col"
@@ -250,7 +302,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
             <p className="text-center text-[11px] text-slate-500 my-auto">Henüz mesaj yazılmamış.</p>
           ) : (
             messages.map((m) => {
-              const isMe = m.senderId === auth.currentUser.uid;
+              const isMe = m.senderId === auth.currentUser?.uid;
               const senderTitle = getUserTitle(m.senderMessageCount || 0);
               return (
                 <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
@@ -282,10 +334,28 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
             🚫 Bu grubun sohbeti moderatör tarafından kapatılmıştır.
           </div>
         ) : isMember ? (
-          <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex space-x-2 shrink-0">
+          <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex items-center space-x-2 shrink-0">
+            {/* Fotoğraf ikonu her zaman tıklanabilir, zamanı gelmediyse uyarı verir */}
+            <button
+              type="button"
+              onClick={handlePhotoIconClick}
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 cursor-pointer transition text-xs shrink-0"
+              title="Buluşma Anısı Paylaş"
+            >
+              📷
+            </button>
+            <input 
+              ref={fileInputRef} 
+              type="file" 
+              accept="image/*" 
+              onChange={handleUploadEventPhoto} 
+              disabled={uploadingPhoto} 
+              className="hidden" 
+            />
+
             <input
               type="text"
-              placeholder="Mesaj yaz..."
+              placeholder={uploadingPhoto ? "Fotoğraf yükleniyor..." : "Mesaj yaz..."}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               className="flex-grow bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
@@ -317,7 +387,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup }) {
               <p className="text-[11px] text-slate-300 italic bg-slate-800/50 p-2 rounded-xl w-full">{selectedUserForProfile.bio || "Biyografi yok."}</p>
 
               {/* Takip Et Butonu */}
-              {selectedUserForProfile.uid && selectedUserForProfile.uid !== auth.currentUser.uid && (
+              {selectedUserForProfile.uid && selectedUserForProfile.uid !== auth.currentUser?.uid && (
                 <div className="w-full">
                   {followStatus === "following" ? (
                     <div className="w-full py-1.5 bg-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-xl border border-emerald-500/30">

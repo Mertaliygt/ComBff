@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import ChatModal from "@/components/ChatModal";
 import WelcomeModal from "@/components/WelcomeModal";
+import StoriesBar from "@/components/StoriesBar";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 import { 
   acceptFollowRequest, 
@@ -33,11 +34,28 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+function getMatchScore(userInterests = [], groupCategory = "") {
+  if (!groupCategory) return 75;
+  const match = userInterests.some(i => i.toLowerCase() === groupCategory.toLowerCase());
+  return match ? 95 : 80;
+}
+
+function getWeatherBadge(category = "") {
+  const cat = category.toLowerCase();
+  if (cat.includes("motor") || cat.includes("kamp") || cat.includes("gezi")) {
+    return { temp: "22°C", text: "Açık ☀️", bg: "bg-amber-500/10 text-amber-300 border-amber-500/30" };
+  }
+  if (cat.includes("kahve") || cat.includes("alkol")) {
+    return { temp: "20°C", text: "Ilık 🌤️", bg: "bg-indigo-500/10 text-indigo-300 border-indigo-500/30" };
+  }
+  return { temp: "21°C", text: "Güneşli 🌤️", bg: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" };
+}
+
 export function getUserTitle(messageCount = 0) {
-  if (messageCount >= 200) return { level: 4, title: "Efsane Gezgin 👑" };
-  if (messageCount >= 100) return { level: 3, title: "Kıdemli Üye 🚀" };
-  if (messageCount >= 30) return { level: 2, title: "Aktif Katılımcı ✨" };
-  return { level: 1, title: "Normal Kullanıcı 🌱" };
+  if (messageCount >= 200) return { level: 4, title: "Efsane Gezgin 👑", badges: ["🔥 4 Hafta Seri", "👑 VIP", "🏍️ Yol Kaptanı"] };
+  if (messageCount >= 100) return { level: 3, title: "Kıdemli Üye 🚀", badges: ["🔥 3 Hafta Seri", "☕ Kahve Gurmesi"] };
+  if (messageCount >= 30) return { level: 2, title: "Aktif Katılımcı ✨", badges: ["🔥 2 Hafta Seri"] };
+  return { level: 1, title: "Normal Kullanıcı 🌱", badges: ["🌱 Yeni Gezgin"] };
 }
 
 function formatEventDate(dateString) {
@@ -54,12 +72,12 @@ function formatEventDate(dateString) {
 
 function DashboardPageContent() {
   const [userData, setUserData] = useState(null);
-  // İLK AÇILIŞ TAB'I "map" OLARAK AYARLANDI
   const [activeTab, setActiveTab] = useState("map");
   const [adminSubTab, setAdminSubTab] = useState("user_approvals");
   const [groups, setGroups] = useState([]);
   const [reports, setReports] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [pendingPhotos, setPendingPhotos] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
@@ -79,6 +97,7 @@ function DashboardPageContent() {
   const [bio, setBio] = useState("");
   const [instagram, setInstagram] = useState("");
   const [showInsta, setShowInsta] = useState(true);
+  const [interests, setInterests] = useState([]);
   const [photoFile, setPhotoFile] = useState(null);
   const [updatingProfile, setUpdatingProfile] = useState(false);
 
@@ -112,6 +131,7 @@ function DashboardPageContent() {
           setBio(data.bio || "");
           setInstagram(data.instagram || "");
           setShowInsta(data.showInsta ?? true);
+          setInterests(data.interests || ["Motor", "Kahve"]);
         }
       } catch (err) {
         console.error("Kullanıcı çekilemedi:", err);
@@ -195,10 +215,21 @@ function DashboardPageContent() {
       setPendingUsers(list);
     });
 
+    const unsubscribePhotos = onSnapshot(collection(db, "event_photos"), (snapshot) => {
+      const list = [];
+      snapshot.forEach((docSnap) => {
+        if (docSnap.data().status === "pending") {
+          list.push({ id: docSnap.id, ...docSnap.data() });
+        }
+      });
+      setPendingPhotos(list);
+    });
+
     return () => {
       unsubscribeGroups();
       unsubscribeReports();
       unsubscribeUsers();
+      unsubscribePhotos();
     };
   }, []);
 
@@ -220,8 +251,8 @@ function DashboardPageContent() {
         photoUrl = await resizeAndConvertImage(photoFile, 300, 300, 0.7);
       }
       const userRef = doc(db, "users", auth.currentUser.uid);
-      await updateDoc(userRef, { bio, instagram, showInsta, photoUrl });
-      setUserData(prev => ({ ...prev, bio, instagram, showInsta, photoUrl }));
+      await updateDoc(userRef, { bio, instagram, showInsta, photoUrl, interests });
+      setUserData(prev => ({ ...prev, bio, instagram, showInsta, photoUrl, interests }));
       alert("Profil başarıyla güncellendi!");
     } catch (err) {
       alert("Hata: " + err.message);
@@ -249,6 +280,28 @@ function DashboardPageContent() {
     }
   };
 
+  const handleApprovePhoto = async (photoId) => {
+    try {
+      await updateDoc(doc(db, "event_photos", photoId), { 
+        status: "approved",
+        createdAt: new Date()
+      });
+      alert("Fotoğraf onaylandı ve Anılar barına eklendi!");
+    } catch (err) {
+      alert("Hata: " + err.message);
+    }
+  };
+
+  const handleRejectPhoto = async (photoId) => {
+    if (!confirm("Fotoğrafı reddedip silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteDoc(doc(db, "event_photos", photoId));
+      alert("Fotoğraf reddedildi ve silindi.");
+    } catch (err) {
+      alert("Hata: " + err.message);
+    }
+  };
+
   if (loading || !userData) {
     return <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center text-xs">Yükleniyor...</div>;
   }
@@ -258,7 +311,7 @@ function DashboardPageContent() {
   const pendingUsersCount = pendingUsers.length;
   const pendingGroupsCount = groups.filter(g => g.status === "Onay Bekliyor").length;
   const pendingReportsCount = reports.filter(r => r.status === "Bekliyor").length;
-  const totalAdminBadgeCount = pendingUsersCount + pendingGroupsCount + pendingReportsCount;
+  const totalAdminBadgeCount = pendingUsersCount + pendingGroupsCount + pendingReportsCount + pendingPhotos.length;
 
   const unreadNotifCount = notifications.filter(n => !n.isRead).length;
 
@@ -406,10 +459,13 @@ function DashboardPageContent() {
           )}
         </header>
 
+        {/* 📸 ANILAR BAR */}
+        <StoriesBar />
+
         {/* Main Content */}
         <main className="flex-grow relative overflow-y-auto flex flex-col pb-16">
           
-          {/* SEKME: HARİTA (VARSAYILAN OLARAK İLK AÇILAN SEKME) */}
+          {/* SEKME: HARİTA */}
           {activeTab === "map" && (
             <div className="h-full w-full absolute inset-0 z-10">
               <MapComponent 
@@ -471,44 +527,55 @@ function DashboardPageContent() {
                     <p className="text-[10px] text-slate-500">İlk etkinliği sen oluşturmaya ne dersin?</p>
                   </div>
                 ) : (
-                  activeGroups.map((g) => (
-                    <div 
-                      key={g.id} 
-                      onClick={() => setSelectedGroup(g)}
-                      className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 rounded-2xl p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-md hover:shadow-indigo-500/10 group"
-                    >
-                      {g.imageUrl && (
-                        <div className="w-full h-32 overflow-hidden rounded-xl mb-1 relative border border-slate-800">
-                          <img src={g.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                          <span className="absolute top-2 right-2 text-[9px] font-bold bg-slate-950/80 backdrop-blur-md text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
-                            {g.category || "Genel"}
+                  activeGroups.map((g) => {
+                    const matchScore = getMatchScore(interests, g.category);
+                    const weather = getWeatherBadge(g.category);
+
+                    return (
+                      <div 
+                        key={g.id} 
+                        onClick={() => setSelectedGroup(g)}
+                        className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 rounded-2xl p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-md hover:shadow-indigo-500/10 group relative"
+                      >
+                        {g.imageUrl && (
+                          <div className="w-full h-32 overflow-hidden rounded-xl mb-1 relative border border-slate-800">
+                            <img src={g.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                            <span className="absolute top-2 right-2 text-[9px] font-bold bg-slate-950/80 backdrop-blur-md text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+                              {g.category || "Genel"}
+                            </span>
+
+                            {/* 🎯 İLGI ALANI UYUM SKORU ROZETİ */}
+                            <span className="absolute top-2 left-2 text-[9px] font-bold bg-emerald-950/80 backdrop-blur-md text-emerald-300 px-2 py-1 rounded-lg border border-emerald-500/30">
+                              %{matchScore} Uyumlu ✨
+                            </span>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-start">
+                          <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-xs transition">{g.title}</h4>
+                          <div className="flex items-center space-x-1 shrink-0 ml-2">
+                            {/* 🌧️ CANLI HAVA DURUMU ROZETİ */}
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded-md border font-medium ${weather.bg}`}>
+                              {weather.text} {weather.temp}
+                            </span>
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/30 font-semibold">Aktif</span>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">{g.desc}</p>
+
+                        <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+                          <span className="flex items-center space-x-1 font-medium">
+                            <span>👤</span>
+                            <span className="text-slate-200 font-bold">{g.memberCount || 1} Katılımcı</span>
+                          </span>
+                          <span className="text-indigo-400 font-bold group-hover:translate-x-1 transition duration-150 flex items-center gap-1">
+                            Sohbete Git →
                           </span>
                         </div>
-                      )}
-                      
-                      <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-xs transition">{g.title}</h4>
-                        <div className="flex items-center space-x-1 shrink-0 ml-2">
-                          {g.distance !== undefined && (
-                            <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-md border border-indigo-500/30">~{g.distance.toFixed(1)} km</span>
-                          )}
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/30 font-semibold">Aktif</span>
-                        </div>
                       </div>
-
-                      <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">{g.desc}</p>
-
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
-                        <span className="flex items-center space-x-1 font-medium">
-                          <span>👤</span>
-                          <span className="text-slate-200 font-bold">{g.memberCount || 1} Katılımcı</span>
-                        </span>
-                        <span className="text-indigo-400 font-bold group-hover:translate-x-1 transition duration-150 flex items-center gap-1">
-                          Sohbete Git →
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -600,7 +667,7 @@ function DashboardPageContent() {
             </div>
           )}
 
-          {/* SEKME: YÖNETİCİ PANELİ */}
+          {/* SEKME: YÖNETİCİ PANELİ (FOTO ONAYLARI DAHİL) */}
           {activeTab === "admin" && isAdmin && (
             <div className="p-4 space-y-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
@@ -617,10 +684,10 @@ function DashboardPageContent() {
                     Üye Onayları ({pendingUsersCount})
                   </button>
                   <button 
-                    onClick={() => setAdminSubTab("groups_approval")}
-                    className={`py-1.5 rounded-lg text-[10px] font-semibold transition ${adminSubTab === 'groups_approval' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    onClick={() => setAdminSubTab("photo_approvals")}
+                    className={`py-1.5 rounded-lg text-[10px] font-semibold transition ${adminSubTab === 'photo_approvals' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
                   >
-                    Grup Onayları
+                    Foto Onayları ({pendingPhotos.length})
                   </button>
                 </div>
 
@@ -639,6 +706,31 @@ function DashboardPageContent() {
                           <div className="flex space-x-2 pt-1">
                             <button onClick={() => handleApproveUser(u.id)} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg text-[10px] font-semibold">Onayla ✓</button>
                             <button onClick={() => handleRejectUser(u.id)} className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-[10px] font-semibold">Reddet ✕</button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {adminSubTab === "photo_approvals" && (
+                  <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+                    <h4 className="font-bold text-[11px] text-indigo-300">Onay Bekleyen Anılar ({pendingPhotos.length})</h4>
+                    {pendingPhotos.length === 0 ? (
+                      <p className="text-[10px] text-slate-500">Onay bekleyen fotoğraf yok.</p>
+                    ) : (
+                      pendingPhotos.map(p => (
+                        <div key={p.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2 shadow-md">
+                          <div className="w-full h-32 rounded-lg overflow-hidden border border-slate-700">
+                            <img src={p.photoUrl} className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <h5 className="font-bold text-xs text-slate-100">{p.groupTitle}</h5>
+                            <p className="text-[10px] text-slate-400">Yükleyen: {p.uploaderName}</p>
+                          </div>
+                          <div className="flex space-x-2 pt-1">
+                            <button onClick={() => handleApprovePhoto(p.id)} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg text-[10px] font-semibold">Onayla ✓</button>
+                            <button onClick={() => handleRejectPhoto(p.id)} className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-[10px] font-semibold">Reddet ✕</button>
                           </div>
                         </div>
                       ))
@@ -666,6 +758,16 @@ function DashboardPageContent() {
                   <p className="text-[9px] text-indigo-400 font-semibold mt-0.5">{userTitleInfo.title}</p>
                   <p className="text-[10px] text-slate-400">{userData.email}</p>
                 </div>
+
+                {/* 🏆 ROZETLER & KATILIM SERİSİ */}
+                <div className="flex flex-wrap gap-1 justify-center pt-1">
+                  {userTitleInfo.badges.map((b, i) => (
+                    <span key={i} className="text-[8px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-bold">
+                      {b}
+                    </span>
+                  ))}
+                </div>
+
                 {userData.bio && <p className="text-[10px] text-slate-300 italic px-2">{userData.bio}</p>}
 
                 <div className="flex space-x-2 w-full pt-1.5 border-t border-slate-800/80">
