@@ -488,11 +488,14 @@ export default function DashboardPage() {
           )}
 
           {/* SEKME: HARİTA */}
-          {activeTab === "map" && (
-            <div className="h-full w-full absolute inset-0">
-              <MapComponent groups={groups} />
-            </div>
-          )}
+{activeTab === "map" && (
+  <div className="h-full w-full absolute inset-0 z-10">
+    <MapComponent 
+      groups={groups} 
+      onSelectGroup={(g) => setSelectedGroup(g)} 
+    />
+  </div>
+)}
 
           {/* SEKME: TAKVİM */}
           {activeTab === "calendar" && (
@@ -829,8 +832,13 @@ export default function DashboardPage() {
         )}
 
         {isCreateModalOpen && <CreateGroupModal onClose={() => setIsCreateModalOpen(false)} />}
-        {selectedGroup && <ChatModal group={selectedGroup} onClose={() => setSelectedGroup(null)} />}
-
+{selectedGroup && (
+  <ChatModal 
+    group={selectedGroup} 
+    onClose={() => setSelectedGroup(null)} 
+    onSwitchGroup={(newGroup) => setSelectedGroup(newGroup)} 
+  />
+)}
       </div>
     </div>
   );
