@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import ChatModal from "@/components/ChatModal";
+import WelcomeModal from "@/components/WelcomeModal";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 import { 
   acceptFollowRequest, 
@@ -53,7 +54,8 @@ function formatEventDate(dateString) {
 
 function DashboardPageContent() {
   const [userData, setUserData] = useState(null);
-  const [activeTab, setActiveTab] = useState("groups");
+  // İLK AÇILIŞ TAB'I "map" OLARAK AYARLANDI
+  const [activeTab, setActiveTab] = useState("map");
   const [adminSubTab, setAdminSubTab] = useState("user_approvals");
   const [groups, setGroups] = useState([]);
   const [reports, setReports] = useState([]);
@@ -72,6 +74,7 @@ function DashboardPageContent() {
   const [userLocation, setUserLocation] = useState(null);
   const [sortByNearby, setSortByNearby] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   const [bio, setBio] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -82,6 +85,13 @@ function DashboardPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetGroupId = searchParams.get("groupId");
+
+  useEffect(() => {
+    const isSeen = localStorage.getItem("tripbff_welcome_seen");
+    if (!isSeen) {
+      setShowWelcomeModal(true);
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -272,7 +282,6 @@ function DashboardPageContent() {
   });
 
   const userTitleInfo = getUserTitle(userData.messageCount || 0);
-
   const firstName = userData.fullName ? userData.fullName.split(" ")[0] : "Gezgin";
 
   return (
@@ -281,7 +290,7 @@ function DashboardPageContent() {
         
         {/* HEADER */}
         <header className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-4 flex justify-between items-center shrink-0 z-25 relative">
-          <div className="flex flex-col cursor-pointer" onClick={() => setActiveTab("groups")}>
+          <div className="flex flex-col cursor-pointer" onClick={() => setActiveTab("map")}>
             <h2 className="font-black text-indigo-400 text-sm tracking-wider">TRIPBFF</h2>
             <span className="text-[10px] text-slate-300 font-semibold flex items-center gap-1">
               <span>Hoş geldin,</span>
@@ -400,6 +409,17 @@ function DashboardPageContent() {
         {/* Main Content */}
         <main className="flex-grow relative overflow-y-auto flex flex-col pb-16">
           
+          {/* SEKME: HARİTA (VARSAYILAN OLARAK İLK AÇILAN SEKME) */}
+          {activeTab === "map" && (
+            <div className="h-full w-full absolute inset-0 z-10">
+              <MapComponent 
+                groups={groups} 
+                onSelectGroup={(g) => setSelectedGroup(g)}
+                externalSelectedGroup={mapFocusedGroup}
+              />
+            </div>
+          )}
+
           {/* SEKME: AKTİF GRUPLAR */}
           {activeTab === "groups" && (
             <div className="p-4 space-y-3.5 transition-all duration-300 ease-out">
@@ -491,17 +511,6 @@ function DashboardPageContent() {
                   ))
                 )}
               </div>
-            </div>
-          )}
-
-          {/* SEKME: HARİTA */}
-          {activeTab === "map" && (
-            <div className="h-full w-full absolute inset-0 z-10">
-              <MapComponent 
-                groups={groups} 
-                onSelectGroup={(g) => setSelectedGroup(g)}
-                externalSelectedGroup={mapFocusedGroup}
-              />
             </div>
           )}
 
@@ -597,7 +606,7 @@ function DashboardPageContent() {
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-4">
                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                   <h3 className="font-bold text-xs text-amber-400">Moderatör Yönetim Paneli</h3>
-                  <button onClick={() => setActiveTab("groups")} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition">Kapat</button>
+                  <button onClick={() => setActiveTab("map")} className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition">Kapat</button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
@@ -640,10 +649,10 @@ function DashboardPageContent() {
             </div>
           )}
 
-          {/* SEKME: PROFİL (DÜZENLENDİ: YUKARIYA 'PROFİLİ DÜZENLE', AŞAĞIYA 'KATILDIĞIM GRUPLAR') */}
+          {/* SEKME: PROFİL */}
           {activeTab === "profile" && (
             <div className="p-3.5 space-y-3">
-              {/* KULLANICI BİLGİ KARTI (KOMPAKT) */}
+              {/* KULLANICI BİLGİ KARTI */}
               <div className="bg-slate-900/80 border border-slate-800 p-3.5 rounded-2xl flex flex-col items-center text-center shadow-lg space-y-2">
                 <div className="w-16 h-16 rounded-full bg-indigo-600/30 border-2 border-indigo-500/50 flex items-center justify-center text-indigo-300 font-bold text-lg overflow-hidden shrink-0">
                   {userData.photoUrl ? (
@@ -686,7 +695,7 @@ function DashboardPageContent() {
                 </div>
               </div>
 
-              {/* 1. PROFİLİ DÜZENLE FORMU (YUKARI TAŞINDI & BOYUTU KÜÇÜLTÜLDÜ) */}
+              {/* PROFİLİ DÜZENLE FORMU */}
               <form onSubmit={handleUpdateProfile} className="bg-slate-900/60 border border-slate-800 p-3 rounded-2xl space-y-2.5 shadow-md">
                 <h4 className="font-bold text-xs text-indigo-400">Profili Düzenle</h4>
                 <div className="flex flex-col space-y-1">
@@ -710,7 +719,7 @@ function DashboardPageContent() {
                 </button>
               </form>
 
-              {/* 2. KATILDIĞIM GRUPLAR / AKTİF ETKİNLİKLERİM (AŞAĞI TAŞINDI & BOYUTU KÜÇÜLTÜLDÜ) */}
+              {/* KATILDIĞIM GRUPLAR / AKTİF ETKİNLİKLERİM */}
               <div className="space-y-2 pt-1">
                 <h4 className="font-bold text-xs text-indigo-300">Katıldığım Gruplar ({myJoinedGroups.length})</h4>
                 {myJoinedGroups.length === 0 ? (
@@ -773,6 +782,13 @@ function DashboardPageContent() {
         </nav>
 
         {/* MODALLAR */}
+        {showWelcomeModal && (
+          <WelcomeModal 
+            userName={userData?.fullName} 
+            onClose={() => setShowWelcomeModal(false)} 
+          />
+        )}
+
         {followModalType && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-4 flex flex-col space-y-3 shadow-2xl max-h-96 overflow-y-auto">
