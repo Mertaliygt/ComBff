@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, where, doc, deleteDoc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
 
 export default function StoriesBar() {
   const [stories, setStories] = useState([]);
   const [selectedStory, setSelectedStory] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "event_photos"), where("status", "==", "approved"));
@@ -28,6 +29,21 @@ export default function StoriesBar() {
     return () => unsub();
   }, []);
 
+  // 🎯 Kullanıcının Kendi Anısını Silme Fonksiyonu
+  const handleDeleteMyStory = async (storyId) => {
+    if (!confirm("Bu anıyı silmek istediğinize emin misiniz?")) return;
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, "event_photos", storyId));
+      setSelectedStory(null);
+      alert("Anınız başarıyla silindi.");
+    } catch (err) {
+      alert("Silme hatası: " + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="w-full bg-slate-900/60 border-b border-slate-800/80 p-2.5 overflow-x-auto shrink-0 min-h-[68px] flex items-center">
       <div className="flex space-x-3 items-center w-full">
@@ -48,7 +64,7 @@ export default function StoriesBar() {
             >
               <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-500 via-indigo-500 to-emerald-400 group-hover:scale-105 transition transform">
                 <div className="w-full h-full rounded-full overflow-hidden border-2 border-slate-950 bg-slate-800">
-                  <img src={s.photoUrl} className="w-full h-full object-cover" />
+                  <img src={s.photoUrl} className="w-full h-full object-cover" alt="Anı" />
                 </div>
               </div>
               <span className="text-[8px] text-slate-300 font-medium truncate w-11 text-center">
@@ -65,18 +81,37 @@ export default function StoriesBar() {
           onClick={() => setSelectedStory(null)}
           className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
         >
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-3 max-w-xs w-full flex flex-col space-y-3 relative overflow-hidden">
+          <div 
+            onClick={(e) => e.stopPropagation()} 
+            className="bg-slate-900 border border-slate-800 rounded-3xl p-4 max-w-xs w-full flex flex-col space-y-3 relative overflow-hidden shadow-2xl"
+          >
             <div className="relative h-72 w-full rounded-2xl overflow-hidden border border-slate-800">
-              <img src={selectedStory.photoUrl} className="w-full h-full object-cover" />
+              <img src={selectedStory.photoUrl} className="w-full h-full object-cover" alt="Detay" />
               <div className="absolute top-2 left-2 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-[9px] font-bold text-indigo-300">
                 📍 {selectedStory.groupTitle || "Buluşma Anısı"}
               </div>
             </div>
+
             <div className="text-center">
               <h4 className="font-bold text-xs text-slate-100">Paylaşan: {selectedStory.uploaderName}</h4>
               <p className="text-[10px] text-slate-400 mt-0.5">Etkinlik buluşma kanıtı</p>
             </div>
-            <button className="w-full py-1.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
+
+            {/* 🎯 Sadece Anıyı Yükleyen Kişiye Görünen Sil Butonu */}
+            {auth.currentUser && auth.currentUser.uid === selectedStory.uploaderUid && (
+              <button
+                onClick={() => handleDeleteMyStory(selectedStory.id)}
+                disabled={deleting}
+                className="w-full py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                {deleting ? "Siliniyor..." : "Anımı Sil 🗑️"}
+              </button>
+            )}
+
+            <button 
+              onClick={() => setSelectedStory(null)}
+              className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition cursor-pointer"
+            >
               Kapat
             </button>
           </div>
