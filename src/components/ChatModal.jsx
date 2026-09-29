@@ -16,6 +16,20 @@ const memeList = [
   { img: "/memes/7.PNG", text: "Aradığın 'arkadaş' burada olmayabilir ama deniyorsun 😂" }
 ];
 
+// 🌦️ Kategoriye göre hava durumu ve atmosfer belirleme helper'ı
+const getGroupWeatherAtmosphere = (category) => {
+  switch (category) {
+    case "Motor / Sürüş":
+      return { text: "Açık", temp: "22°C", bgAtmosphere: "border-indigo-500/40 shadow-indigo-600/20", glowColor: "from-indigo-600/10" };
+    case "Kamp / Doğa":
+      return { text: "Yağmurlu", temp: "14°C", bgAtmosphere: "border-cyan-500/40 shadow-cyan-600/20", glowColor: "from-cyan-600/15" };
+    case "Gezi / Seyahat":
+      return { text: "Bulutlu", temp: "18°C", bgAtmosphere: "border-amber-500/40 shadow-amber-600/20", glowColor: "from-amber-600/10" };
+    default:
+      return { text: "Açık", temp: "20°C", bgAtmosphere: "border-slate-700 shadow-indigo-500/10", glowColor: "from-indigo-600/10" };
+  }
+};
+
 export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
@@ -32,6 +46,9 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
 
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Hava durumu atmosferini al
+  const weatherAtmosphere = getGroupWeatherAtmosphere(group.category);
 
   const checkCanUploadPhoto = () => {
     if (!group.eventDate) return false;
@@ -146,7 +163,6 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
     }
   };
 
-  // 🎯 FOTOĞRAF KALİTESİ DÜŞMEDEN ORİJİNAL OKuma (FileReader ile)
   const handleUploadEventPhoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -159,7 +175,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         await addDoc(collection(db, "event_photos"), {
           groupId: group.id,
           groupTitle: group.title,
-          photoUrl: originalBase64, // Orijinal, sıkıştırılmamış yüksek kaliteli görsel
+          photoUrl: originalBase64,
           uploaderUid: auth.currentUser.uid,
           uploaderName: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Gezgin",
           status: "pending",
@@ -238,11 +254,9 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         });
         setIsMember(true);
 
-        // 🎯 Rastgele Meme Seç ve Göster
         const randomMeme = memeList[Math.floor(Math.random() * memeList.length)];
         setActiveMeme(randomMeme);
 
-        // 🎯 Süre 2 Saniye (2000ms)
         setTimeout(() => {
           setActiveMeme(null);
         }, 2000);
@@ -277,13 +291,22 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-      <div className="bg-slate-900 border border-slate-800 w-full max-w-lg h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl relative">
+      {/* 🌤️ Hava Durumuna Göre Dinamik Atmosferik Arka Plan (Border ve Gölge Efekti) */}
+      <div className={`bg-slate-900 border-2 ${weatherAtmosphere.bgAtmosphere} w-full max-w-lg h-[90vh] rounded-2xl flex flex-col overflow-hidden shadow-2xl relative transition-all duration-500`}>
         
+        {/* Üst Atmosferik Işık Parıltısı (Glow) */}
+        <div className={`absolute top-0 left-0 right-0 h-24 bg-gradient-to-b ${weatherAtmosphere.glowColor} to-transparent pointer-events-none`} />
+
         {/* Header */}
-        <div className="p-3.5 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center shrink-0">
+        <div className="p-3.5 bg-slate-900/90 border-b border-slate-800 flex justify-between items-center shrink-0 z-10">
           <div>
-            <h3 className="font-bold text-xs text-indigo-400">{group.title} {isChatClosed && <span className="text-rose-500 font-bold">(KAPALI)</span>}</h3>
-            <p className="text-[10px] text-slate-400">📅 {formattedDate} • 👤 {group.memberCount || 1} Katılımcı</p>
+            <div className="flex items-center space-x-1.5">
+              <h3 className="font-bold text-xs text-indigo-400">{group.title} {isChatClosed && <span className="text-rose-500 font-bold">(KAPALI)</span>}</h3>
+              <span className="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700">
+                🌤️ {weatherAtmosphere.text} {weatherAtmosphere.temp}
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-0.5">📅 {formattedDate} • 👤 {group.memberCount || 1} Katılımcı</p>
           </div>
           <div className="flex items-center space-x-1.5">
             {group.latitude && group.longitude && onShowOnMap && (
@@ -292,7 +315,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
                 className="px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-xl text-[9px] font-bold transition cursor-pointer flex items-center space-x-1"
                 title="Haritada Göster"
               >
-                <span>🗺️ Harita</span>
+                <span>🗺️️ Harita</span>
               </button>
             )}
 
@@ -309,7 +332,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         </div>
 
         {/* Grup Bilgi */}
-        <div className="p-3 bg-slate-800/40 border-b border-slate-800 shrink-0 space-y-1">
+        <div className="p-3 bg-slate-800/40 border-b border-slate-800 shrink-0 space-y-1 z-10">
           {group.imageUrl && (
             <div className="w-full h-28 rounded-lg overflow-hidden mb-2">
               <img 
@@ -325,7 +348,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         {/* Mesaj Akışı */}
         <div 
           ref={chatContainerRef} 
-          className="flex-grow p-3 overflow-y-auto space-y-2.5 flex flex-col"
+          className="flex-grow p-3 overflow-y-auto space-y-2.5 flex flex-col z-10"
         >
           {messages.length === 0 ? (
             <p className="text-center text-[11px] text-slate-500 my-auto">Henüz mesaj yazılmamış.</p>
@@ -359,11 +382,11 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
 
         {/* Form veya Kapalı Alan */}
         {isChatClosed ? (
-          <div className="p-3 bg-rose-950/40 border-t border-rose-900/50 text-center text-[11px] text-rose-400 shrink-0 font-semibold">
+          <div className="p-3 bg-rose-950/40 border-t border-rose-900/50 text-center text-[11px] text-rose-400 shrink-0 font-semibold z-10">
             🚫 Bu grubun sohbeti moderatör tarafından kapatılmıştır.
           </div>
         ) : isMember ? (
-          <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex items-center space-x-2 shrink-0">
+          <form onSubmit={handleSendMessage} className="p-3 bg-slate-900 border-t border-slate-800 flex items-center space-x-2 shrink-0 z-10">
             <button
               type="button"
               onClick={handlePhotoIconClick}
@@ -391,7 +414,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
             <button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer">Gönder</button>
           </form>
         ) : (
-          <div className="p-3 bg-slate-900 border-t border-slate-800 text-center text-[11px] text-slate-400 shrink-0">
+          <div className="p-3 bg-slate-900 border-t border-slate-800 text-center text-[11px] text-slate-400 shrink-0 z-10">
             Mesaj yazmak için <span className="text-indigo-400 font-bold">"Katıl"</span>malısın.
           </div>
         )}
