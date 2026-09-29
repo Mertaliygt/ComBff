@@ -142,7 +142,7 @@ export default function LoginPage() {
       <div className="tb-auth-card w-full max-w-md bg-panel border border-line rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col space-y-5">
         
         <div className="text-center space-y-1">
-          <h2 className="text-2xl font-black text-brand tracking-wider">TRIPBFF</h2>
+          <h2 className="text-2xl font-black text-brand tracking-wider">ComBFF</h2>
           <p className="text-sm text-muted">{isLogin ? "Etkinlikler ve yeni arkadaşlar keşfet" : "Yeni hesap oluştur ve onaya gönder"}</p>
         </div>
 

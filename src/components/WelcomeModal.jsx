@@ -32,7 +32,7 @@ export default function WelcomeModal({ userName, onClose }) {
             Aramıza Hoş Geldin, <span className="text-brand">{firstName}</span>!
           </h2>
           <p className="text-[13px] text-muted leading-relaxed">
-            TripBFF ile çevrendeki insanlarla tanışmaya ve yeni maceralara atılmaya hazırsın.
+            ComBFF ile çevrendeki insanlarla tanışmaya ve yeni maceralara atılmaya hazırsın.
           </p>
         </div>
 

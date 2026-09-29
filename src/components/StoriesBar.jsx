@@ -29,7 +29,6 @@ export default function StoriesBar() {
     return () => unsub();
   }, []);
 
-  // 🎯 Kullanıcının Kendi Anısını Silme Fonksiyonu
   const handleDeleteMyStory = async (storyId) => {
     if (!confirm("Bu anıyı silmek istediğinize emin misiniz?")) return;
     setDeleting(true);
@@ -45,8 +44,33 @@ export default function StoriesBar() {
   };
 
   return (
-    <div className="tb-stories w-full bg-panel/60 border-b border-line/80 p-2.5 overflow-x-auto shrink-0 min-h-[68px] flex items-center">
-      <div className="flex space-x-3 items-center w-full">
+    <div className="tb-stories w-full border-b border-line/80 p-2.5 shrink-0 min-h-[68px] flex items-center relative">
+      {/* Minimalist doğa / dağ illüzyonu arka plan */}
+      <div className="tb-stories-bg absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="xMidYMax slice">
+          <defs>
+            <linearGradient id="storiesSky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#9ec5ff" stopOpacity="0.22" />
+              <stop offset="55%" stopColor="#c8ddf8" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="#e8f0ea" stopOpacity="0.08" />
+            </linearGradient>
+            <linearGradient id="storiesFar" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7aa3d4" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="#a8c4e0" stopOpacity="0.1" />
+            </linearGradient>
+            <linearGradient id="storiesNear" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#5f8f6a" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#8fb89a" stopOpacity="0.08" />
+            </linearGradient>
+          </defs>
+          <rect width="400" height="100" fill="url(#storiesSky)" />
+          <path d="M0 72 L55 42 L95 62 L140 28 L195 58 L240 36 L290 64 L340 40 L400 68 L400 100 L0 100 Z" fill="url(#storiesFar)" />
+          <path d="M0 86 L70 58 L120 78 L175 50 L230 74 L300 55 L360 78 L400 62 L400 100 L0 100 Z" fill="url(#storiesNear)" />
+          <circle cx="332" cy="22" r="10" fill="#ffe9a8" opacity="0.35" />
+        </svg>
+      </div>
+
+      <div className="flex space-x-3 items-center w-full relative z-10 overflow-x-auto">
         <span className="text-[12px] font-bold text-brand shrink-0 uppercase tracking-wider px-1 flex items-center gap-1">
           <span>📸</span> <span>Anılar</span>
         </span>
@@ -75,7 +99,6 @@ export default function StoriesBar() {
         )}
       </div>
 
-      {/* Story Pop-up Modal */}
       {selectedStory && (
         <div 
           onClick={() => setSelectedStory(null)}
@@ -97,7 +120,6 @@ export default function StoriesBar() {
               <p className="text-[12px] text-muted mt-0.5">Etkinlik buluşma kanıtı</p>
             </div>
 
-            {/* 🎯 Sadece Anıyı Yükleyen Kişiye Görünen Sil Butonu */}
             {auth.currentUser && auth.currentUser.uid === selectedStory.uploaderUid && (
               <button
                 onClick={() => handleDeleteMyStory(selectedStory.id)}

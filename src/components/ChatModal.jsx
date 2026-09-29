@@ -4,6 +4,7 @@ import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
 import { getUserTitle } from "@/app/dashboard/page";
 import { sendFollowRequest } from "@/lib/followService";
+import { fetchEventWeather, getAtmosphereFromWeather, estimateWeatherFallback } from "@/utils/weatherHelper";
 
 // 🎯 Daha Alaycı ve Keskin Meme Listesi
 const memeList = [
@@ -15,20 +16,6 @@ const memeList = [
   { img: "/memes/6.PNG", text: "Rastgele tıkladın dimi? Tabii tabii... :D" },
   { img: "/memes/7.PNG", text: "Aradığın 'arkadaş' burada olmayabilir ama deniyorsun 😂" }
 ];
-
-// 🌦️ Kategoriye göre hava durumu ve atmosfer belirleme helper'ı
-const getGroupWeatherAtmosphere = (category) => {
-  switch (category) {
-    case "Motor / Sürüş":
-      return { text: "Açık", temp: "22°C", bgAtmosphere: "border-blue-500/40 shadow-blue-600/20", glowColor: "from-blue-600/10" };
-    case "Kamp / Doğa":
-      return { text: "Yağmurlu", temp: "14°C", bgAtmosphere: "border-cyan-500/40 shadow-cyan-600/20", glowColor: "from-cyan-600/15" };
-    case "Gezi / Seyahat":
-      return { text: "Bulutlu", temp: "18°C", bgAtmosphere: "border-amber-500/40 shadow-amber-600/20", glowColor: "from-amber-600/10" };
-    default:
-      return { text: "Açık", temp: "20°C", bgAtmosphere: "border-line shadow-blue-500/10", glowColor: "from-blue-600/10" };
-  }
-};
 
 export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }) {
   const [messages, setMessages] = useState([]);
@@ -47,14 +34,29 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Hava durumu atmosferini al
-  const weatherAtmosphere = getGroupWeatherAtmosphere(group.category);
+  const [weatherAtmosphere, setWeatherAtmosphere] = useState(() =>
+    getAtmosphereFromWeather(
+      estimateWeatherFallback({ latitude: group.latitude, eventDate: group.eventDate })
+    )
+  );
 
   const isEventExpired = Boolean(
     group.eventDate &&
     (Date.now() - new Date(group.eventDate).getTime()) >= 24 * 60 * 60 * 1000
   );
   const chatLocked = isChatClosed || isEventExpired;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchEventWeather({
+      latitude: group.latitude,
+      longitude: group.longitude,
+      eventDate: group.eventDate,
+    }).then((weather) => {
+      if (!cancelled) setWeatherAtmosphere(getAtmosphereFromWeather(weather));
+    });
+    return () => { cancelled = true; };
+  }, [group.id, group.latitude, group.longitude, group.eventDate]);
 
   useEffect(() => {
     if (group.chatStatus === "Kapalı" || isEventExpired) {

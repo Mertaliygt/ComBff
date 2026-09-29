@@ -71,8 +71,8 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
   const handleShareEvent = async (group) => {
     const shareUrl = `${window.location.origin}/dashboard?groupId=${group.id}`;
     const shareData = {
-      title: `TripBFF: ${group.title}`,
-      text: `${group.title} etkinliğine davetlisin! TripBFF'te birlikte katılalım: ${group.desc}`,
+      title: `ComBFF: ${group.title}`,
+      text: `${group.title} etkinliğine davetlisin! ComBFF'te birlikte katılalım: ${group.desc}`,
       url: shareUrl,
     };
 

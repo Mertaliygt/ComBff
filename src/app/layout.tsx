@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "TripBFF | Yeni rotalar, yeni arkadaşlar",
+  title: "ComBFF | Yeni rotalar, yeni arkadaşlar",
   description: "Yakınındaki etkinlikleri keşfet, gruplara katıl ve birlikte yeni anılar biriktir.",
 };
 

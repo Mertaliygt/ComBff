@@ -10,6 +10,7 @@ import ChatModal from "@/components/ChatModal";
 import WelcomeModal from "@/components/WelcomeModal";
 
 import StoriesBar from "@/components/StoriesBar";
+import EventWeatherBadge from "@/components/EventWeatherBadge";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 import { 
   acceptFollowRequest, 
@@ -39,17 +40,6 @@ function getMatchScore(userInterests = [], groupCategory = "") {
   if (!groupCategory) return 75;
   const match = userInterests.some(i => i.toLowerCase() === groupCategory.toLowerCase());
   return match ? 95 : 80;
-}
-
-function getWeatherBadge(category = "") {
-  const cat = category.toLowerCase();
-  if (cat.includes("motor") || cat.includes("kamp") || cat.includes("gezi")) {
-    return { temp: "22°C", text: "Açık ☀️", bg: "bg-amber-500/10 text-amber-300 border-amber-500/30" };
-  }
-  if (cat.includes("kahve") || cat.includes("alkol")) {
-    return { temp: "20°C", text: "Ilık 🌤️", bg: "bg-blue-500/10 text-brand border-blue-500/30" };
-  }
-  return { temp: "21°C", text: "Güneşli 🌤️", bg: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" };
 }
 
 export function getUserTitle(messageCount = 0) {
@@ -140,13 +130,13 @@ function GroupMemberAvatars({ memberIds = [], maxVisible = 4 }) {
 
   if (profiles === null) {
     return (
-      <div className="h-8 w-8 rounded-full bg-inset border border-line shrink-0 animate-pulse" />
+      <div className="h-7 w-7 rounded-full bg-inset border border-line shrink-0 animate-pulse" />
     );
   }
 
   if (profiles.length === 0) {
     return (
-      <div className="inline-flex h-8 w-8 rounded-full ring-2 ring-[var(--tb-panel)] bg-blue-600/30 border border-blue-400/30 items-center justify-center text-[11px] font-bold text-brand shrink-0">
+      <div className="inline-flex h-7 w-7 rounded-full ring-2 ring-[var(--tb-panel)] bg-blue-600/30 border border-blue-400/30 items-center justify-center text-[10px] font-bold text-brand shrink-0">
         U
       </div>
     );
@@ -158,7 +148,7 @@ function GroupMemberAvatars({ memberIds = [], maxVisible = 4 }) {
         <div
           key={m.id || idx}
           title={m.fullName}
-          className="inline-flex h-8 w-8 rounded-full ring-2 ring-[var(--tb-panel)] overflow-hidden bg-blue-600/40 border border-blue-400/30 items-center justify-center text-[11px] font-bold text-brand shrink-0"
+          className="inline-flex h-7 w-7 rounded-full ring-2 ring-[var(--tb-panel)] overflow-hidden bg-blue-600/40 border border-blue-400/30 items-center justify-center text-[10px] font-bold text-brand shrink-0"
         >
           {m.photoUrl ? (
             <img src={m.photoUrl} alt={m.fullName || "Katılımcı"} className="w-full h-full object-cover" />
@@ -608,7 +598,7 @@ function DashboardPageContent() {
         {/* HEADER */}
         <header className={`tb-header h-16 ${isDarkMode ? 'bg-panel/80 border-line' : 'bg-panel/80 border-line'} backdrop-blur-md px-4 flex justify-between items-center shrink-0 z-25 relative transition-colors duration-300`}>
           <div className="flex flex-col cursor-pointer" onClick={() => { setActiveTab("map"); setIsNotifOpen(false); }}>
-            <h2 className={`font-black ${isDarkMode ? 'text-brand' : 'text-brand'} text-sm tracking-wider`}>TRIPBFF</h2>
+            <h2 className={`font-black ${isDarkMode ? 'text-brand' : 'text-brand'} text-sm tracking-wider`}>ComBFF</h2>
             <span className={`text-[12px] ${isDarkMode ? 'text-muted' : 'text-muted'} font-semibold flex items-center gap-1`}>
               <span>Hoş geldin,</span>
               <span className={`${isDarkMode ? 'text-brand' : 'text-brand'} font-bold`}>{firstName}</span>
@@ -757,23 +747,21 @@ function DashboardPageContent() {
           {/* AKTİF GRUPLAR */}
           {activeTab === "groups" && (
             <div className="tb-groups p-4 space-y-3.5 transition-all duration-300 ease-out">
-              <div className={`tb-discovery ${isDarkMode ? 'bg-gradient-to-r from-blue-900/40 via-panel to-blue-950/40 border-blue-500/30 text-ink' : 'bg-gradient-to-r from-blue-50 via-white to-blue-100 border-blue-300 text-ink'} border p-4 rounded-2xl flex flex-col space-y-3 shadow-xl backdrop-blur-md relative overflow-hidden transition-colors duration-300`}>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-extrabold text-sm flex items-center gap-1.5">
-                      <span>Yeni rotalar, yeni arkadaşlar</span>
-                    </h3>
-                    <p className={`text-[12px] ${isDarkMode ? 'text-muted' : 'text-muted'} mt-0.5`}>Çevrendeki maceralara katıl veya yeni bir etkinlik başlat!</p>
+              <div className={`tb-discovery ${isDarkMode ? 'text-ink' : 'text-ink'} relative overflow-hidden transition-colors duration-300`}>
+                <div className="tb-discovery-hero">
+                  <div className="tb-discovery-copy min-w-0">
+                    <h3>Yeni rotalar, yeni arkadaşlar</h3>
+                    <p className={`${isDarkMode ? 'text-muted' : 'text-muted'}`}>Çevrendeki maceralara katıl veya yeni bir etkinlik başlat!</p>
                   </div>
                   <button
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-2 rounded-xl text-[12px] transition shadow-lg shadow-blue-600/40 flex items-center space-x-1 cursor-pointer hover:scale-105 transform duration-150"
+                    className="tb-discovery-create bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-2 rounded-xl text-[12px] transition shadow-lg shadow-blue-600/40 cursor-pointer shrink-0"
                   >
-                    <span>+ Etkinlik Oluştur</span>
+                    + Etkinlik Oluştur
                   </button>
                 </div>
 
-                <div className={`flex space-x-2 pt-1 border-t ${isDarkMode ? 'border-line' : 'border-line'}`}>
+                <div className="tb-discovery-actions flex space-x-2">
                   <button
                     onClick={() => {
                       if (!navigator.geolocation) return alert("Konum desteklenmiyor.");
@@ -805,7 +793,6 @@ function DashboardPageContent() {
                 ) : (
                   activeGroups.map((g) => {
                     const matchScore = getMatchScore(interests, g.category);
-                    const weather = getWeatherBadge(g.category);
                     const locationLabel = getGroupLocationLabel(g);
                     const memberCount = g.memberCount || g.members?.length || 1;
                     const dateLabel = g.eventDate
@@ -829,48 +816,47 @@ function DashboardPageContent() {
                             alt={g.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                           />
-                          <span className="absolute top-3 right-3 text-[11px] font-bold backdrop-blur-md px-2.5 py-1 rounded-full border border-white/15">
+                          <span className="absolute top-2.5 right-2.5 text-[10px] font-bold backdrop-blur-md px-2 py-0.5 rounded-full border border-white/15">
                             {g.category || "Genel"}
                           </span>
-                          <span className="absolute top-3 left-3 text-[11px] font-bold backdrop-blur-md px-2.5 py-1 rounded-full border border-emerald-400/40">
+                          <span className="absolute top-2.5 left-2.5 text-[10px] font-bold backdrop-blur-md px-2 py-0.5 rounded-full border border-emerald-400/40">
                             %{matchScore} Uyumlu ✨
                           </span>
                         </div>
 
-                        <div>
+                        <div className="tb-event-body">
                           <h4 className={`font-bold ${isDarkMode ? "text-ink" : "text-ink"} group-hover:text-brand transition`}>
                             {g.title}
                           </h4>
-                          <p className={`text-[13px] ${isDarkMode ? "text-muted" : "text-muted"} mt-1.5 flex items-center gap-1.5`}>
+                          <p className={`tb-event-location ${isDarkMode ? "text-muted" : "text-muted"} flex items-center gap-1`}>
                             <span aria-hidden="true">📍</span>
-                            <span>{locationLabel}</span>
+                            <span className="truncate">{locationLabel}</span>
                           </p>
                           {g.genderAudience && g.genderAudience !== "Herkese Açık" && (
-                            <p className="text-[11px] text-amber-400 font-semibold mt-1">{g.genderAudience}</p>
+                            <p className="text-[10px] text-amber-400 font-semibold mt-0.5">{g.genderAudience}</p>
                           )}
                         </div>
 
-                        <p className={`text-[13px] ${isDarkMode ? "text-muted" : "text-muted"} line-clamp-2 leading-relaxed`}>
-                          {g.desc}
-                        </p>
-
-                        <div className="flex items-center flex-wrap gap-2">
-                          <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium px-2.5 py-1.5 rounded-xl border ${isDarkMode ? "bg-inset/80 border-line text-ink" : "bg-inset border-line text-ink"}`}>
+                        <div className="tb-event-meta flex items-center flex-nowrap gap-1.5 overflow-x-auto">
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-lg border shrink-0 ${isDarkMode ? "bg-inset/80 border-line text-ink" : "bg-inset border-line text-ink"}`}>
                             <span aria-hidden="true">📅</span>
                             <span>{dateLabel}</span>
                           </span>
-                          <span className="inline-flex items-center text-[12px] font-semibold px-2.5 py-1.5 rounded-xl border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                          <span className="inline-flex items-center text-[11px] font-semibold px-2 py-1 rounded-lg border shrink-0 bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
                             Aktif
                           </span>
-                          <span className={`inline-flex items-center gap-1 text-[12px] font-medium px-2.5 py-1.5 rounded-xl border ${weather.bg}`}>
-                            {weather.text} {weather.temp}
-                          </span>
+                          <EventWeatherBadge
+                            latitude={g.latitude}
+                            longitude={g.longitude}
+                            eventDate={g.eventDate}
+                            className="shrink-0"
+                          />
                         </div>
 
-                        <div className={`flex justify-between items-center border-t ${isDarkMode ? "border-line/80" : "border-line"}`}>
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <GroupMemberAvatars memberIds={g.members || []} />
-                            <span className={`text-[12px] font-semibold ${isDarkMode ? "text-muted" : "text-muted"} truncate`}>
+                        <div className={`tb-event-footer flex justify-between items-center border-t ${isDarkMode ? "border-line/80" : "border-line"}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <GroupMemberAvatars memberIds={g.members || []} maxVisible={4} />
+                            <span className={`text-[11px] font-semibold ${isDarkMode ? "text-muted" : "text-muted"} truncate`}>
                               {memberCount} katılımcı
                             </span>
                           </div>

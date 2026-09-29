@@ -27,7 +27,7 @@ export default function LandingPage() {
             <span>✨ Sosyal Harita & Etkinlik Ağı</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400">
-            TRIPBFF
+            ComBFF
           </h1>
         </div>
 
