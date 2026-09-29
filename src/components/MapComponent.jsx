@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 
 function getTimeRemaining(eventDateStr) {
-  if (!eventDateStr) return { text: "Tarih Belirtilmedi", color: "text-slate-400 bg-slate-800/60 border-slate-700" };
+  if (!eventDateStr) return { text: "Tarih Belirtilmedi", color: "text-muted bg-inset/60 border-line" };
   const eventTime = new Date(eventDateStr).getTime();
   const now = new Date().getTime();
   const diff = eventTime - now;
@@ -24,7 +24,7 @@ function getTimeRemaining(eventDateStr) {
   } else if (hours > 0) {
     return { text: `🔥 ${hours} saat kaldı`, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" };
   } else {
-    return { text: `⚡ Çok yakında başlıyor!`, color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30 animate-pulse" };
+    return { text: `⚡ Çok yakında başlıyor!`, color: "text-brand bg-blue-500/10 border-blue-500/30 animate-pulse" };
   }
 }
 
@@ -90,7 +90,7 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
 
   if (!isMounted) {
     return (
-      <div className="flex items-center justify-center h-full text-xs text-slate-400">
+      <div className="flex items-center justify-center h-full text-sm text-muted">
         Harita hazırlanıyor...
       </div>
     );
@@ -128,7 +128,7 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
   };
 
   return (
-    <div className="w-full h-full relative overflow-hidden">
+    <div className="tb-map w-full h-full relative overflow-hidden">
       <MapContainer
         center={[centerLat, centerLng]}
         zoom={12}
@@ -170,34 +170,34 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
 
         return (
           <div 
-            className="absolute inset-0 bg-black/60 z-30 flex flex-col justify-end pb-16 animate-fadeIn"
+            className="tb-map-backdrop absolute inset-0 bg-black/60 z-30 flex flex-col justify-end pb-16 animate-fadeIn"
             onClick={() => setActiveGroup(null)}
           >
             <div 
-              className="bg-slate-900 border-t border-slate-800 w-full rounded-t-3xl p-4 shadow-2xl space-y-3 relative transition-all duration-200 ease-out max-h-[80%] overflow-y-auto"
+              className="tb-map-sheet bg-panel border-t border-line w-full rounded-t-3xl p-4 shadow-2xl space-y-3 relative transition-all duration-200 ease-out max-h-[80%] overflow-y-auto"
               style={{ willChange: "transform, opacity" }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-1 opacity-70" />
+              <div className="w-10 h-1 bg-inset rounded-full mx-auto mb-1 opacity-70" />
 
               <div className="absolute top-3 right-3 flex items-center space-x-1.5">
                 <button 
                   onClick={() => handleShareEvent(activeGroup)}
                   title="Etkinliği Paylaş"
-                  className="w-7 h-7 bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 rounded-full flex items-center justify-center text-[10px] font-bold transition cursor-pointer"
+                  className="w-7 h-7 bg-blue-600/20 hover:bg-blue-600 text-brand hover:text-white border border-blue-500/30 rounded-full flex items-center justify-center text-[12px] font-bold transition cursor-pointer"
                 >
                   🔗
                 </button>
                 <button 
                   onClick={() => setActiveGroup(null)}
-                  className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full flex items-center justify-center text-[10px] font-bold transition cursor-pointer"
+                  className="w-7 h-7 bg-inset hover:bg-inset text-muted rounded-full flex items-center justify-center text-[12px] font-bold transition cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
               <div className="flex space-x-3 items-center">
-                <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 shrink-0 border border-slate-700 shadow-md">
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-inset shrink-0 border border-line shadow-md">
                   <img 
                     src={activeGroup.imageUrl || "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=100&q=80"} 
                     className="w-full h-full object-cover" 
@@ -206,43 +206,43 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
                 </div>
                 <div className="space-y-1 overflow-hidden pr-12">
                   <div className="flex items-center space-x-1.5 flex-wrap">
-                    <span className="text-[8px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30">
+                    <span className="text-[11px] font-bold uppercase tracking-wider bg-blue-500/20 text-brand px-2 py-0.5 rounded border border-blue-500/30">
                       {activeGroup.category || "Genel"}
                     </span>
-                    <span className={`text-[8px] font-bold px-2 py-0.5 rounded border ${timeRemaining.color}`}>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${timeRemaining.color}`}>
                       {timeRemaining.text}
                     </span>
                   </div>
-                  <h3 className="font-bold text-xs text-slate-100 truncate mt-0.5">{activeGroup.title}</h3>
-                  <p className="text-[10px] text-slate-400 truncate">{activeGroup.desc}</p>
+                  <h3 className="font-bold text-sm text-ink truncate mt-0.5">{activeGroup.title}</h3>
+                  <p className="text-[12px] text-muted truncate">{activeGroup.desc}</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 text-[10px]">
+              <div className="grid grid-cols-2 gap-2 bg-canvas/80 p-2.5 rounded-xl border border-line/80 text-[12px]">
                 <div>
-                  <span className="text-slate-500 block text-[8px] font-medium">📅 Tarih</span>
-                  <span className="text-slate-200 font-semibold truncate block">
+                  <span className="text-muted block text-[11px] font-medium">📅 Tarih</span>
+                  <span className="text-ink font-semibold truncate block">
                     {activeGroup.eventDate ? new Date(activeGroup.eventDate).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }) : 'Belirtilmedi'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[8px] font-medium">🚀 Katılım</span>
-                  <span className="text-indigo-400 font-bold block">{activeGroup.memberCount || activeGroup.members?.length || 1} Kişi</span>
+                  <span className="text-muted block text-[11px] font-medium">🚀 Katılım</span>
+                  <span className="text-brand font-bold block">{activeGroup.memberCount || activeGroup.members?.length || 1} Kişi</span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <span className="text-[9px] text-slate-400 font-semibold block">Katılımcılar:</span>
+                <span className="text-[11px] text-muted font-semibold block">Katılımcılar:</span>
                 <div className="flex items-center space-x-1">
                   {loadingMembers ? (
-                    <span className="text-[9px] text-slate-500">Yükleniyor...</span>
+                    <span className="text-[11px] text-muted">Yükleniyor...</span>
                   ) : (
                     <div className="flex -space-x-2 overflow-hidden py-0.5">
                       {memberProfiles.map((m, idx) => (
                         <div 
                           key={m.id || idx} 
                           title={m.fullName}
-                          className="inline-block h-7 w-7 rounded-full ring-2 ring-slate-900 overflow-hidden bg-indigo-600/40 border border-indigo-400/30 flex items-center justify-center text-[10px] font-bold text-indigo-200 shrink-0"
+                          className="inline-block h-7 w-7 rounded-full ring-2 ring-line overflow-hidden bg-blue-600/40 border border-blue-400/30 flex items-center justify-center text-[12px] font-bold text-brand shrink-0"
                         >
                           {m.photoUrl ? (
                             <img src={m.photoUrl} className="w-full h-full object-cover" />
@@ -252,7 +252,7 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
                         </div>
                       ))}
                       {(activeGroup.members?.length || 0) > 5 && (
-                        <div className="inline-block h-7 w-7 rounded-full ring-2 ring-slate-900 bg-slate-800 border border-slate-700 flex items-center justify-center text-[8px] font-bold text-slate-300">
+                        <div className="inline-block h-7 w-7 rounded-full ring-2 ring-line bg-inset border border-line flex items-center justify-center text-[11px] font-bold text-muted">
                           +{(activeGroup.members?.length || 0) - 5}
                         </div>
                       )}
@@ -267,7 +267,7 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
                     href={`https://www.google.com/maps/dir/?api=1&destination=${activeGroup.latitude},${activeGroup.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition border border-slate-700 flex items-center justify-center space-x-1 cursor-pointer"
+                    className="flex-1 py-2.5 bg-inset hover:bg-inset text-ink font-bold rounded-xl text-sm transition border border-line flex items-center justify-center space-x-1 cursor-pointer"
                   >
                     <span>📍 Yol Tarifi</span>
                   </a>
@@ -279,7 +279,7 @@ export default function MapComponent({ groups = [], onSelectGroup, externalSelec
                     setActiveGroup(null);
                     if (onSelectGroup) onSelectGroup(selected);
                   }}
-                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-indigo-600/30 flex items-center justify-center space-x-1 cursor-pointer"
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-sm transition shadow-md shadow-blue-600/30 flex items-center justify-center space-x-1 cursor-pointer"
                 >
                   <span>Sohbete Git</span>
                   <span>💬 →</span>

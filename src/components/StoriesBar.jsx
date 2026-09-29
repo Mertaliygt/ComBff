@@ -45,14 +45,14 @@ export default function StoriesBar() {
   };
 
   return (
-    <div className="w-full bg-slate-900/60 border-b border-slate-800/80 p-2.5 overflow-x-auto shrink-0 min-h-[68px] flex items-center">
+    <div className="tb-stories w-full bg-panel/60 border-b border-line/80 p-2.5 overflow-x-auto shrink-0 min-h-[68px] flex items-center">
       <div className="flex space-x-3 items-center w-full">
-        <span className="text-[10px] font-bold text-indigo-400 shrink-0 uppercase tracking-wider px-1 flex items-center gap-1">
+        <span className="text-[12px] font-bold text-brand shrink-0 uppercase tracking-wider px-1 flex items-center gap-1">
           <span>📸</span> <span>Anılar</span>
         </span>
 
         {stories.length === 0 ? (
-          <div className="text-[10px] text-slate-500 italic pl-2">
+          <div className="text-[12px] text-muted italic pl-2">
             Henüz paylaşılan bir anı bulunmuyor.
           </div>
         ) : (
@@ -62,12 +62,12 @@ export default function StoriesBar() {
               onClick={() => setSelectedStory(s)}
               className="flex flex-col items-center space-y-1 shrink-0 cursor-pointer group"
             >
-              <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-500 via-indigo-500 to-emerald-400 group-hover:scale-105 transition transform">
-                <div className="w-full h-full rounded-full overflow-hidden border-2 border-slate-950 bg-slate-800">
+              <div className="w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-amber-500 via-blue-500 to-emerald-400 group-hover:scale-105 transition transform">
+                <div className="w-full h-full rounded-full overflow-hidden border-2 border-line bg-inset">
                   <img src={s.photoUrl} className="w-full h-full object-cover" alt="Anı" />
                 </div>
               </div>
-              <span className="text-[8px] text-slate-300 font-medium truncate w-11 text-center">
+              <span className="text-[11px] text-muted font-medium truncate w-11 text-center">
                 {s.uploaderName || "Gezgin"}
               </span>
             </div>
@@ -79,22 +79,22 @@ export default function StoriesBar() {
       {selectedStory && (
         <div 
           onClick={() => setSelectedStory(null)}
-          className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
+          className="tb-story-overlay tb-overlay fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 cursor-pointer"
         >
           <div 
             onClick={(e) => e.stopPropagation()} 
-            className="bg-slate-900 border border-slate-800 rounded-3xl p-4 max-w-xs w-full flex flex-col space-y-3 relative overflow-hidden shadow-2xl"
+            className="bg-panel border border-line rounded-3xl p-4 max-w-xs w-full flex flex-col space-y-3 relative overflow-hidden shadow-2xl"
           >
-            <div className="relative h-72 w-full rounded-2xl overflow-hidden border border-slate-800">
+            <div className="relative h-72 w-full rounded-2xl overflow-hidden border border-line">
               <img src={selectedStory.photoUrl} className="w-full h-full object-cover" alt="Detay" />
-              <div className="absolute top-2 left-2 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-[9px] font-bold text-indigo-300">
+              <div className="absolute top-2 left-2 bg-canvas/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-[11px] font-bold text-brand">
                 📍 {selectedStory.groupTitle || "Buluşma Anısı"}
               </div>
             </div>
 
             <div className="text-center">
-              <h4 className="font-bold text-xs text-slate-100">Paylaşan: {selectedStory.uploaderName}</h4>
-              <p className="text-[10px] text-slate-400 mt-0.5">Etkinlik buluşma kanıtı</p>
+              <h4 className="font-bold text-sm text-ink">Paylaşan: {selectedStory.uploaderName}</h4>
+              <p className="text-[12px] text-muted mt-0.5">Etkinlik buluşma kanıtı</p>
             </div>
 
             {/* 🎯 Sadece Anıyı Yükleyen Kişiye Görünen Sil Butonu */}
@@ -102,7 +102,7 @@ export default function StoriesBar() {
               <button
                 onClick={() => handleDeleteMyStory(selectedStory.id)}
                 disabled={deleting}
-                className="w-full py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold rounded-xl transition cursor-pointer"
+                className="w-full py-2 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 text-sm font-bold rounded-xl transition cursor-pointer"
               >
                 {deleting ? "Siliniyor..." : "Anımı Sil 🗑️"}
               </button>
@@ -110,7 +110,7 @@ export default function StoriesBar() {
 
             <button 
               onClick={() => setSelectedStory(null)}
-              className="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition cursor-pointer"
+              className="w-full py-1.5 bg-inset hover:bg-inset text-muted text-sm font-semibold rounded-xl transition cursor-pointer"
             >
               Kapat
             </button>
