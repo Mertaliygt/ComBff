@@ -11,6 +11,7 @@ import WelcomeModal from "@/components/WelcomeModal";
 
 import StoriesBar from "@/components/StoriesBar";
 import EventWeatherBadge from "@/components/EventWeatherBadge";
+import ThanksWall from "@/components/ThanksWall";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 import { 
   acceptFollowRequest, 
@@ -386,9 +387,6 @@ function DashboardPageContent() {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    if (!gender) {
-      return alert("Cinsiyet bilgisi zorunludur.");
-    }
     setUpdatingProfile(true);
     try {
       let photoUrl = userData.photoUrl || "";
@@ -396,8 +394,9 @@ function DashboardPageContent() {
         photoUrl = await resizeAndConvertImage(photoFile, 300, 300, 0.7);
       }
       const userRef = doc(db, "users", auth.currentUser.uid);
-      await updateDoc(userRef, { bio, instagram, showInsta, photoUrl, interests, gender });
-      setUserData(prev => ({ ...prev, bio, instagram, showInsta, photoUrl, interests, gender }));
+      // Cinsiyet güvenlik nedeniyle profil güncellemesinde değiştirilemez
+      await updateDoc(userRef, { bio, instagram, showInsta, photoUrl, interests });
+      setUserData(prev => ({ ...prev, bio, instagram, showInsta, photoUrl, interests }));
       alert("Profil başarıyla güncellendi!");
     } catch (err) {
       alert("Hata: " + err.message);
@@ -903,6 +902,12 @@ function DashboardPageContent() {
                     <p className="text-[11px] text-brand font-medium pt-0.5">
                       Sohbet kapalı. Anıları üstteki Anılar barından inceleyebilirsiniz.
                     </p>
+                    <ThanksWall
+                      groupId={g.id}
+                      members={g.members || []}
+                      authorName={userData.fullName || firstName}
+                      isDarkMode={isDarkMode}
+                    />
                   </div>
                 ))
               )}
@@ -1156,6 +1161,10 @@ function DashboardPageContent() {
                   <h3 className="font-bold text-sm">{userData.fullName} ({userData.age})</h3>
                   <p className="text-[11px] text-brand font-semibold mt-0.5">{userTitleInfo.title}</p>
                   <p className="text-[12px] text-muted">{userData.email}</p>
+                  <p className="text-[11px] text-muted mt-1">
+                    Cinsiyet: <span className="font-semibold text-ink">{userData.gender || gender || "Belirtilmedi"}</span>
+                    <span className="text-muted"> · değiştirilemez</span>
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-1 justify-center pt-1">
@@ -1200,20 +1209,6 @@ function DashboardPageContent() {
                 <div className="flex flex-col space-y-1">
                   <label className="text-[11px] text-muted">Profil Fotoğrafı Değiştir</label>
                   <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files[0])} className="text-[11px] text-muted file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[11px] file:bg-blue-600 file:text-white cursor-pointer" />
-                </div>
-                <div className="flex flex-col space-y-1">
-                  <label className="text-[11px] text-muted">Cinsiyet (zorunlu)</label>
-                  <select
-                    required
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className={`${isDarkMode ? 'bg-inset border-line text-ink' : 'bg-canvas border-line text-ink'} border rounded-xl px-2.5 py-1.5 text-[13px] focus:outline-none focus:border-blue-500`}
-                  >
-                    <option value="" disabled>Cinsiyet seçin</option>
-                    <option value="Kadın">Kadın</option>
-                    <option value="Erkek">Erkek</option>
-                    <option value="Diğer">Diğer</option>
-                  </select>
                 </div>
                 <div className="flex flex-col space-y-1">
                   <label className="text-[11px] text-muted">Biyografi</label>
