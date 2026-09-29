@@ -201,6 +201,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         alert("Fotoğraf yükleme hatası: " + err.message);
       } finally {
         setUploadingPhoto(false);
+        if (e.target) e.target.value = "";
       }
     };
     reader.onerror = () => {
