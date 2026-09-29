@@ -11,7 +11,6 @@ import WelcomeModal from "@/components/WelcomeModal";
 
 import StoriesBar from "@/components/StoriesBar";
 import EventWeatherBadge from "@/components/EventWeatherBadge";
-import ThanksWall from "@/components/ThanksWall";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 import { 
   acceptFollowRequest, 
@@ -902,12 +901,6 @@ function DashboardPageContent() {
                     <p className="text-[11px] text-brand font-medium pt-0.5">
                       Sohbet kapalı. Anıları üstteki Anılar barından inceleyebilirsiniz.
                     </p>
-                    <ThanksWall
-                      groupId={g.id}
-                      members={g.members || []}
-                      authorName={userData.fullName || firstName}
-                      isDarkMode={isDarkMode}
-                    />
                   </div>
                 ))
               )}
