@@ -4,7 +4,17 @@ import { db, auth } from "@/lib/firebase";
 import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
 import { getUserTitle } from "@/app/dashboard/page";
 import { sendFollowRequest } from "@/lib/followService";
-import { resizeAndConvertImage } from "@/utils/imageHelper";
+
+// 🎯 Daha Alaycı ve Keskin Meme Listesi
+const memeList = [
+  { img: "/memes/1.PNG", text: "Kesinlikle sadece etkinlik için katıldın, evet :))" },
+  { img: "/memes/2.PNG", text: "Yemezler aslanım, amacını biliyoruz 😏" },
+  { img: "/memes/3.PNG", text: "Çok hızlıydın şampiyon, yavaş biraz :)" },
+  { img: "/memes/4.PNG", text: "Niyet 0.5 saniyede belli oldu haa 🕵️‍♂️" },
+  { img: "/memes/5.PNG", text: "Seni uyanık seni, yakalandın! 🚨" },
+  { img: "/memes/6.PNG", text: "Rastgele tıkladın dimi? Tabii tabii... :D" },
+  { img: "/memes/7.PNG", text: "Aradığın 'arkadaş' burada olmayabilir ama deniyorsun 😂" }
+];
 
 export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }) {
   const [messages, setMessages] = useState([]);
@@ -17,6 +27,9 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
   const [isChatClosed, setIsChatClosed] = useState(group.chatStatus === "Kapalı");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   
+  // 🎯 Meme Popup State
+  const [activeMeme, setActiveMeme] = useState(null);
+
   const chatContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -133,28 +146,37 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
     }
   };
 
+  // 🎯 FOTOĞRAF KALİTESİ DÜŞMEDEN ORİJİNAL OKuma (FileReader ile)
   const handleUploadEventPhoto = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setUploadingPhoto(true);
 
-    try {
-      const photoBase64 = await resizeAndConvertImage(file, 600, 600, 0.7);
-      await addDoc(collection(db, "event_photos"), {
-        groupId: group.id,
-        groupTitle: group.title,
-        photoUrl: photoBase64,
-        uploaderUid: auth.currentUser.uid,
-        uploaderName: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Gezgin",
-        status: "pending",
-        createdAt: new Date()
-      });
-      alert("Buluşma fotoğrafı moderatör onayına gönderildi! Onaylandıktan sonra Anılar kısmında görünür.");
-    } catch (err) {
-      alert("Fotoğraf yükleme hatası: " + err.message);
-    } finally {
+    const reader = new FileReader();
+    reader.onload = async (uploadEvent) => {
+      try {
+        const originalBase64 = uploadEvent.target.result;
+        await addDoc(collection(db, "event_photos"), {
+          groupId: group.id,
+          groupTitle: group.title,
+          photoUrl: originalBase64, // Orijinal, sıkıştırılmamış yüksek kaliteli görsel
+          uploaderUid: auth.currentUser.uid,
+          uploaderName: auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "Gezgin",
+          status: "pending",
+          createdAt: new Date()
+        });
+        alert("Buluşma fotoğrafı orijinal kalitede moderatör onayına gönderildi! Onaylandıktan sonra Anılar kısmında görünür.");
+      } catch (err) {
+        alert("Fotoğraf yükleme hatası: " + err.message);
+      } finally {
+        setUploadingPhoto(false);
+      }
+    };
+    reader.onerror = () => {
+      alert("Dosya okunamadı.");
       setUploadingPhoto(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSendFollow = async () => {
@@ -215,6 +237,15 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
           memberCount: (group.memberCount || 0) + 1
         });
         setIsMember(true);
+
+        // 🎯 Rastgele Meme Seç ve Göster
+        const randomMeme = memeList[Math.floor(Math.random() * memeList.length)];
+        setActiveMeme(randomMeme);
+
+        // 🎯 Süre 2 Saniye (2000ms)
+        setTimeout(() => {
+          setActiveMeme(null);
+        }, 2000);
       }
     } catch (err) {
       alert("İşlem başarısız: " + err.message);
@@ -362,6 +393,20 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         ) : (
           <div className="p-3 bg-slate-900 border-t border-slate-800 text-center text-[11px] text-slate-400 shrink-0">
             Mesaj yazmak için <span className="text-indigo-400 font-bold">"Katıl"</span>malısın.
+          </div>
+        )}
+
+        {/* 🎯 BÜYÜTÜLMÜŞ MEME / EASTER EGG POPUP (2 Saniye Gösterilir) */}
+        {activeMeme && (
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-slate-900 border-2 border-indigo-500 rounded-3xl p-5 max-w-sm w-full flex flex-col items-center text-center space-y-4 shadow-2xl shadow-indigo-600/50">
+              <span className="text-xs sm:text-sm font-black text-indigo-300 tracking-wide bg-indigo-500/20 px-4 py-2 rounded-2xl border border-indigo-500/40">
+                {activeMeme.text}
+              </span>
+              <div className="w-full h-72 rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center shadow-inner">
+                <img src={activeMeme.img} className="w-full h-full object-contain" alt="Meme" />
+              </div>
+            </div>
           </div>
         )}
 

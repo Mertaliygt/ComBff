@@ -1,13 +1,13 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, collection, onSnapshot, deleteDoc, arrayUnion, query, orderBy } from "firebase/firestore";
-import { signOut, onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc, updateDoc, collection, onSnapshot, deleteDoc, arrayUnion, query, orderBy, addDoc } from "firebase/firestore";import { signOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import ChatModal from "@/components/ChatModal";
 import WelcomeModal from "@/components/WelcomeModal";
+
 import StoriesBar from "@/components/StoriesBar";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 import { 
@@ -286,8 +286,25 @@ function DashboardPageContent() {
 
   const handleApproveGroup = async (groupId) => {
     try {
-      await updateDoc(doc(db, "groups", groupId), { status: "Aktif" });
-      alert("Grup onaylandı ve yayına alındı!");
+      const groupRef = doc(db, "groups", groupId);
+      const groupSnap = await getDoc(groupRef);
+      
+      await updateDoc(groupRef, { status: "Aktif" });
+
+      if (groupSnap.exists()) {
+        const groupData = groupSnap.data();
+        if (groupData.createdBy && groupData.createdBy !== "anonim") {
+          await addDoc(collection(db, "users", groupData.createdBy, "notifications"), {
+            title: "Etkinliğin Onaylandı! 🎉",
+            message: `"${groupData.title}" adlı etkinlik grubun moderatör tarafından onaylandı ve haritada yayına alındı.`,
+            type: "group_approved",
+            isRead: false,
+            createdAt: new Date()
+          });
+        }
+      }
+
+      alert("Grup onaylandı, yayına alındı ve kullanıcıya bildirim gönderildi!");
     } catch (err) {
       alert("Hata: " + err.message);
     }
@@ -296,8 +313,24 @@ function DashboardPageContent() {
   const handleRejectGroup = async (groupId) => {
     if (!confirm("Etkinlik grubunu reddetmek ve silmek istediğinize emin misiniz?")) return;
     try {
-      await deleteDoc(doc(db, "groups", groupId));
-      alert("Grup silindi.");
+      const groupRef = doc(db, "groups", groupId);
+      const groupSnap = await getDoc(groupRef);
+
+      if (groupSnap.exists()) {
+        const groupData = groupSnap.data();
+        if (groupData.createdBy && groupData.createdBy !== "anonim") {
+          await addDoc(collection(db, "users", groupData.createdBy, "notifications"), {
+            title: "Etkinliğin Reddedildi ⚠️",
+            message: `"${groupData.title}" adlı etkinlik grubun kurallara uygun bulunmadığı için onaylanmadı.`,
+            type: "group_rejected",
+            isRead: false,
+            createdAt: new Date()
+          });
+        }
+      }
+
+      await deleteDoc(groupRef);
+      alert("Grup silindi ve sahibine bildirim iletildi.");
     } catch (err) {
       alert("Hata: " + err.message);
     }
@@ -588,51 +621,59 @@ function DashboardPageContent() {
                   </div>
                 ) : (
                   activeGroups.map((g) => {
-                    const matchScore = getMatchScore(interests, g.category);
-                    const weather = getWeatherBadge(g.category);
+  const matchScore = getMatchScore(interests, g.category);
+  const weather = getWeatherBadge(g.category);
 
-                    return (
-                      <div 
-                        key={g.id} 
-                        onClick={() => setSelectedGroup(g)}
-                        className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 rounded-2xl p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-md hover:shadow-indigo-500/10 group relative"
-                      >
-                        {g.imageUrl && (
-                          <div className="w-full h-32 overflow-hidden rounded-xl mb-1 relative border border-slate-800">
-                            <img src={g.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                            <span className="absolute top-2 right-2 text-[9px] font-bold bg-slate-950/80 backdrop-blur-md text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
-                              {g.category || "Genel"}
-                            </span>
-                            <span className="absolute top-2 left-2 text-[9px] font-bold bg-emerald-950/80 backdrop-blur-md text-emerald-300 px-2 py-1 rounded-lg border border-emerald-500/30">
-                              %{matchScore} Uyumlu ✨
-                            </span>
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-between items-start">
-                          <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-xs transition">{g.title}</h4>
-                          <div className="flex items-center space-x-1 shrink-0 ml-2">
-                            <span className={`text-[8px] px-1.5 py-0.5 rounded-md border font-medium ${weather.bg}`}>
-                              {weather.text} {weather.temp}
-                            </span>
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/30 font-semibold">Aktif</span>
-                          </div>
-                        </div>
+  return (
+    <div 
+      key={g.id} 
+      onClick={() => setSelectedGroup(g)}
+      className="bg-slate-900/80 border border-slate-800 hover:border-indigo-500/60 rounded-2xl p-3.5 space-y-2.5 cursor-pointer transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] shadow-md hover:shadow-indigo-500/10 group relative"
+    >
+      {g.imageUrl && (
+        <div className="w-full h-32 overflow-hidden rounded-xl mb-1 relative border border-slate-800">
+          <img src={g.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+          <span className="absolute top-2 right-2 text-[9px] font-bold bg-slate-950/80 backdrop-blur-md text-indigo-300 px-2.5 py-1 rounded-lg border border-indigo-500/30">
+            {g.category || "Genel"}
+          </span>
+          <span className="absolute top-2 left-2 text-[9px] font-bold bg-emerald-950/80 backdrop-blur-md text-emerald-300 px-2 py-1 rounded-lg border border-emerald-500/30">
+            %{matchScore} Uyumlu ✨
+          </span>
+        </div>
+      )}
+      
+      <div className="flex justify-between items-start">
+        <h4 className="font-bold text-slate-100 group-hover:text-indigo-400 text-xs transition">{g.title}</h4>
+        <div className="flex items-center space-x-1 shrink-0 ml-2">
+          <span className={`text-[8px] px-1.5 py-0.5 rounded-md border font-medium ${weather.bg}`}>
+            {weather.text} {weather.temp}
+          </span>
+          <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/30 font-semibold">Aktif</span>
+        </div>
+      </div>
 
-                        <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">{g.desc}</p>
+      <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">{g.desc}</p>
 
-                        <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
-                          <span className="flex items-center space-x-1 font-medium">
-                            <span>👤</span>
-                            <span className="text-slate-200 font-bold">{g.memberCount || 1} Katılımcı</span>
-                          </span>
-                          <span className="text-indigo-400 font-bold group-hover:translate-x-1 transition duration-150 flex items-center gap-1">
-                            Sohbete Git →
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })
+      {/* 📅 EKLENEN TARİH VE SAAT ALANI */}
+      <div className="flex items-center space-x-1.5 text-[10px] text-indigo-300 font-medium pt-0.5">
+        <span>📅</span>
+        <span>
+          {g.eventDate ? new Date(g.eventDate).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Tarih Belirtilmedi'}
+        </span>
+      </div>
+
+      <div className="flex justify-between items-center text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+        <span className="flex items-center space-x-1 font-medium">
+          <span>👤</span>
+          <span className="text-slate-200 font-bold">{g.memberCount || 1} Katılımcı</span>
+        </span>
+        <span className="text-indigo-400 font-bold group-hover:translate-x-1 transition duration-150 flex items-center gap-1">
+          Sohbete Git →
+        </span>
+      </div>
+    </div>
+  );
+})
                 )}
               </div>
             </div>
