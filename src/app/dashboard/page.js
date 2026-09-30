@@ -187,6 +187,8 @@ function DashboardPageContent() {
   const [mapFocusedGroup, setMapFocusedGroup] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [sortByNearby, setSortByNearby] = useState(false);
+  const [filterCategory, setFilterCategory] = useState("Tümü");
+  const [filterAudience, setFilterAudience] = useState("Tümü");
   const [loading, setLoading] = useState(true);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
@@ -564,6 +566,32 @@ function DashboardPageContent() {
     })).sort((a, b) => a.distance - b.distance);
   }
 
+  let filteredActiveGroups = activeGroups;
+  if (filterCategory !== "Tümü") {
+    filteredActiveGroups = filteredActiveGroups.filter((g) => g.category === filterCategory);
+  }
+  if (filterAudience !== "Tümü") {
+    filteredActiveGroups = filteredActiveGroups.filter(
+      (g) => (g.genderAudience || "Herkese Açık") === filterAudience
+    );
+  }
+
+  const GROUP_CATEGORY_FILTERS = [
+    "Tümü",
+    "Yemek / İçki",
+    "Motor / Sürüş",
+    "Kamp / Doğa",
+    "Spor / Fitness",
+    "Gezi / Şehir",
+    "Kahve / Sohbet",
+  ];
+  const GROUP_AUDIENCE_FILTERS = [
+    "Tümü",
+    "Herkese Açık",
+    "Sadece Kadınlara Özel",
+    "Sadece Erkeklere Özel",
+  ];
+
   const completedGroups = groups.filter(g => (g.status === "Aktif" && g.chatStatus === "Kapalı") || (new Date().getTime() - new Date(g.eventDate).getTime()) >= 24 * 60 * 60 * 1000);
 
   const myJoinedGroups = groups.filter(g => g.members?.includes(auth.currentUser.uid));
@@ -780,16 +808,85 @@ function DashboardPageContent() {
                 </div>
               </div>
 
-              <h3 className="tb-section-title">Etkinlik Grupları</h3>
+              <div className="tb-section-head">
+                <h3 className="tb-section-title">Etkinlik Grupları</h3>
+                <div className="tb-group-filters" aria-label="Etkinlik filtreleri">
+                  <label className="tb-filter-field">
+                    <span className="tb-filter-label">Kategori</span>
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className={`tb-filter-select ${isDarkMode ? "bg-inset border-line text-ink" : "bg-panel border-line text-ink"}`}
+                    >
+                      {GROUP_CATEGORY_FILTERS.map((opt) => (
+                        <option key={opt} value={opt}>{opt === "Tümü" ? "Tümü (Kategori)" : opt}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="tb-filter-field">
+                    <span className="tb-filter-label">Cinsiyet</span>
+                    <select
+                      value={filterAudience}
+                      onChange={(e) => setFilterAudience(e.target.value)}
+                      className={`tb-filter-select ${isDarkMode ? "bg-inset border-line text-ink" : "bg-panel border-line text-ink"}`}
+                    >
+                      {GROUP_AUDIENCE_FILTERS.map((opt) => (
+                        <option key={opt} value={opt}>{opt === "Tümü" ? "Tümü (Kimlere)" : opt}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              {(filterCategory !== "Tümü" || filterAudience !== "Tümü") && (
+                <div className="tb-filter-chips mb-3 flex gap-1.5 overflow-x-auto pb-0.5">
+                  {filterCategory !== "Tümü" && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterCategory("Tümü")}
+                      className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-blue-500/30 bg-blue-500/10 text-brand cursor-pointer"
+                    >
+                      {filterCategory} ✕
+                    </button>
+                  )}
+                  {filterAudience !== "Tümü" && (
+                    <button
+                      type="button"
+                      onClick={() => setFilterAudience("Tümü")}
+                      className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 cursor-pointer"
+                    >
+                      {filterAudience} ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
               <div className="tb-event-grid flex flex-col">
-                {activeGroups.length === 0 ? (
+                {filteredActiveGroups.length === 0 ? (
                   <div className="text-center py-10 space-y-2">
                     <span className="text-2xl block">🎉</span>
-                    <p className={`text-sm ${isDarkMode ? 'text-muted' : 'text-muted'} font-medium`}>Şu an onaylanmış aktif etkinlik bulunmuyor.</p>
-                    <p className="text-[12px] text-muted">İlk etkinliği sen oluşturmaya ne dersin?</p>
+                    <p className={`text-sm ${isDarkMode ? 'text-muted' : 'text-muted'} font-medium`}>
+                      {activeGroups.length === 0
+                        ? "Şu an onaylanmış aktif etkinlik bulunmuyor."
+                        : "Seçilen filtrelere uygun etkinlik bulunamadı."}
+                    </p>
+                    <p className="text-[12px] text-muted">
+                      {activeGroups.length === 0
+                        ? "İlk etkinliği sen oluşturmaya ne dersin?"
+                        : "Filtreleri temizleyip tekrar deneyebilirsin."}
+                    </p>
+                    {(filterCategory !== "Tümü" || filterAudience !== "Tümü") && activeGroups.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setFilterCategory("Tümü"); setFilterAudience("Tümü"); }}
+                        className="mt-1 text-[12px] font-bold text-brand underline cursor-pointer"
+                      >
+                        Filtreleri Sıfırla
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  activeGroups.map((g) => {
+                  filteredActiveGroups.map((g) => {
                     const matchScore = getMatchScore(interests, g.category);
                     const locationLabel = getGroupLocationLabel(g);
                     const memberCount = g.memberCount || g.members?.length || 1;
