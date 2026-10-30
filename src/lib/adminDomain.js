@@ -109,6 +109,11 @@ export function eventScheduleMs(item) {
   return parseEventSchedule(item?.eventDate)?.getTime() ?? null;
 }
 
+export function isEventPast(item, now = Date.now()) {
+  const ms = eventScheduleMs(item);
+  return ms != null && ms < now;
+}
+
 export function sortEventsBySchedule(items, now = Date.now()) {
   return [...items].sort((a, b) => {
     const aMs = eventScheduleMs(a);

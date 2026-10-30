@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
-import { eventCapacity, participantLists, sortEventsBySchedule } from "@/lib/adminDomain";
+import { eventCapacity, isEventPast, participantLists, sortEventsBySchedule } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate } from "@/components/admin/AdminShell";
 
 function isPendingEvent(item) {
@@ -17,10 +17,34 @@ function isBrandEvent(item) {
   return Boolean(item.brandName || item.brand || item.organizationName || item.isBrand || item.type === "brand");
 }
 
+function eventLane(item) {
+  if (item.status === "Reddedildi" || item.status === "Yayından Alındı") return "other";
+  if (isPendingEvent(item)) return "pending";
+  if (isEventPast(item)) return "done";
+  return "active";
+}
+
+function eventLaneLabel(item) {
+  const lane = eventLane(item);
+  if (lane === "done") return "Tamamlandı";
+  if (lane === "pending") return "Onay bekliyor";
+  if (item.status === "Reddedildi") return "Reddedildi";
+  if (item.status === "Yayından Alındı") return "Yayından alındı";
+  return "Aktif";
+}
+
+function laneOrder(lane) {
+  if (lane === "active") return 0;
+  if (lane === "done") return 1;
+  if (lane === "pending") return 2;
+  return 3;
+}
+
 export default function AdminEventsPage() {
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState("");
+  const [laneFilter, setLaneFilter] = useState("all");
 
   useEffect(() => {
     const mapSnap = (snapshot, source) =>
@@ -30,7 +54,9 @@ export default function AdminEventsPage() {
     let events = [];
 
     const publish = () => {
-      setItems(sortEventsBySchedule([...groups, ...events]));
+      setItems(
+        sortEventsBySchedule([...groups, ...events]).sort((a, b) => laneOrder(eventLane(a)) - laneOrder(eventLane(b)))
+      );
     };
 
     const unsubGroups = onSnapshot(collection(db, "groups"), (snap) => {
@@ -47,6 +73,11 @@ export default function AdminEventsPage() {
       unsubEvents();
     };
   }, []);
+
+  const visible = useMemo(
+    () => items.filter((item) => laneFilter === "all" || eventLane(item) === laneFilter),
+    [items, laneFilter]
+  );
 
   const notifyOwner = async (item, title, message, type) => {
     if (!item.createdBy || item.createdBy === "anonim") return;
@@ -119,6 +150,31 @@ export default function AdminEventsPage() {
     }
   };
 
+  const toggleChat = async (item) => {
+    const closed = item.chatStatus === "Kapalı";
+    const next = closed ? "Açık" : "Kapalı";
+    const actionLabel = closed ? "sohbeti yeniden açmak" : "sohbet akışını durdurmak";
+    if (!confirm(`"${item.title || "Etkinlik"}" için ${actionLabel} istiyor musunuz?`)) return;
+    const reason = window.prompt("İşlem gerekçesi") || (closed ? "Sohbet açıldı" : "Sohbet durduruldu");
+    setBusyId(item.id);
+    try {
+      await updateDoc(doc(db, item.source, item.id), { chatStatus: next });
+      await writeAdminLog({
+        action: closed ? "event_chat_open" : "event_chat_close",
+        targetType: "event",
+        targetId: item.id,
+        targetLabel: item.title,
+        reason,
+        before: item.chatStatus || "Açık",
+        after: next,
+      });
+    } catch (err) {
+      alert("Sohbet durumu güncellenemedi: " + err.message);
+    } finally {
+      setBusyId("");
+    }
+  };
+
   const remove = async (item) => {
     if (!confirm("Etkinliği tamamen yayından kaldırmak istiyor musunuz?")) return;
     const reason = window.prompt("Yayından kaldırma gerekçesi");
@@ -155,7 +211,13 @@ export default function AdminEventsPage() {
   return (
     <AdminShell active="events">
       <div className="cloop-admin-toolbar">
-        <span>{items.length} etkinlik / marka kaydı</span>
+        <select value={laneFilter} onChange={(e) => setLaneFilter(e.target.value)}>
+          <option value="all">Tümü</option>
+          <option value="active">Aktif</option>
+          <option value="done">Tamamlandı</option>
+          <option value="pending">Onay bekliyor</option>
+        </select>
+        <span>{visible.length} etkinlik</span>
       </div>
       <div className="cloop-admin-table-wrap">
         <table className="cloop-admin-table">
@@ -174,9 +236,15 @@ export default function AdminEventsPage() {
               <tr>
                 <td colSpan={6}>Etkinlik bulunamadı.</td>
               </tr>
+            ) : visible.length === 0 ? (
+              <tr>
+                <td colSpan={6}>Bu filtrede etkinlik yok.</td>
+              </tr>
             ) : (
-              items.map((item) => {
+              visible.map((item) => {
                 const pending = isPendingEvent(item);
+                const lane = eventLane(item);
+                const chatClosed = item.chatStatus === "Kapalı";
                 return (
                   <tr key={`${item.source}-${item.id}`}>
                     <td>
@@ -194,13 +262,22 @@ export default function AdminEventsPage() {
                     </td>
                     <td>{formatAdminDate(item.eventDate || item.createdAt)}</td>
                     <td>
-                      <span className={`cloop-admin-badge ${pending ? "is-warn" : item.status === "Reddedildi" ? "is-danger" : "is-ok"}`}>
-                        {item.status || (item.isApproved ? "Onaylı" : "Onay bekliyor")}
+                      <span className={`cloop-admin-badge ${lane === "active" ? "is-ok" : lane === "done" ? "is-warn" : "is-danger"}`}>
+                        {eventLaneLabel(item)}
                       </span>
+                      <small>{chatClosed ? "Sohbet kapalı" : "Sohbet açık"}</small>
                     </td>
                     <td className="cloop-admin-actions">
                       <button type="button" className="is-warn" onClick={() => router.push(`/admin/events/${item.id}?source=${item.source}`)}>
                         Detay
+                      </button>
+                      <button
+                        type="button"
+                        className={chatClosed ? "is-ok" : "is-warn"}
+                        disabled={busyId === item.id}
+                        onClick={() => toggleChat(item)}
+                      >
+                        {chatClosed ? "Sohbeti aç" : "Sohbeti durdur"}
                       </button>
                       {pending && (
                         <>
