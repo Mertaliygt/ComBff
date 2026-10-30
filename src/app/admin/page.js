@@ -22,6 +22,36 @@ function isActiveEvent(item) {
   return item.isApproved === true;
 }
 
+const ACTIVITY_PAGE_SIZE = 8;
+const ACTIVITY_LIMIT = 24;
+
+function PagedActivityList({ title, items, empty, renderItem }) {
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(items.length / ACTIVITY_PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const slice = items.slice(current * ACTIVITY_PAGE_SIZE, current * ACTIVITY_PAGE_SIZE + ACTIVITY_PAGE_SIZE);
+
+  return (
+    <div className="cloop-admin-panel">
+      <h2>{title}</h2>
+      {items.length === 0 ? <p>{empty}</p> : (
+        <>
+          <ul className="cloop-admin-history">
+            {slice.map(renderItem)}
+          </ul>
+          {pages > 1 && (
+            <div className="cloop-admin-pager">
+              <button type="button" disabled={current === 0} onClick={() => setPage(current - 1)}>Önceki</button>
+              <span>{current + 1} / {pages}</span>
+              <button type="button" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Sonraki</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function ChartList({ title, items, empty }) {
   const max = Math.max(...items.map((i) => i.value), 1);
   return (
@@ -81,7 +111,7 @@ export default function AdminDashboardPage() {
           logsSnap.docs
             .map((d) => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0))
-            .slice(0, 8)
+            .slice(0, ACTIVITY_LIMIT)
         );
       } catch (err) {
         if (!cancelled) setError("Özet veriler yüklenemedi: " + err.message);
@@ -185,13 +215,13 @@ export default function AdminDashboardPage() {
 
   const recentUsers = [...users]
     .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0))
-    .slice(0, 5);
+    .slice(0, ACTIVITY_LIMIT);
   const recentEvents = [...events]
     .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0))
-    .slice(0, 5);
+    .slice(0, ACTIVITY_LIMIT);
   const recentReports = [...reports]
     .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0))
-    .slice(0, 5);
+    .slice(0, ACTIVITY_LIMIT);
 
   return (
     <AdminShell active="dashboard">
@@ -216,63 +246,55 @@ export default function AdminDashboardPage() {
             <ChartList title="Katılım dağılımı" items={joinChart} empty="Katılım verisi yok." />
           </div>
 
-          <div className="cloop-admin-split">
-            <div className="cloop-admin-panel">
-              <h2>Son kayıt olan kullanıcılar</h2>
-              {recentUsers.length === 0 ? <p>Henüz kullanıcı yok.</p> : (
-                <ul className="cloop-admin-history">
-                  {recentUsers.map((u) => (
-                    <li key={u.id}>
-                      <strong>{u.fullName || "İsimsiz"}</strong>
-                      <span>{u.email || "E-posta yok"}</span>
-                      <small>{formatAdminDate(u.createdAt)}</small>
-                    </li>
-                  ))}
-                </ul>
+          <div className="cloop-admin-rail">
+            <PagedActivityList
+              title="Son kayıt olan kullanıcılar"
+              items={recentUsers}
+              empty="Henüz kullanıcı yok."
+              renderItem={(u) => (
+                <li key={u.id}>
+                  <strong>{u.fullName || "İsimsiz"}</strong>
+                  <span>{u.email || "E-posta yok"}</span>
+                  <small>{formatAdminDate(u.createdAt)}</small>
+                </li>
               )}
-            </div>
-            <div className="cloop-admin-panel">
-              <h2>Son oluşturulan etkinlikler</h2>
-              {recentEvents.length === 0 ? <p>Henüz etkinlik yok.</p> : (
-                <ul className="cloop-admin-history">
-                  {recentEvents.map((item) => (
-                    <li key={`${item.source}-${item.id}`}>
-                      <strong>{item.title || "İsimsiz etkinlik"}</strong>
-                      <span>{item.category || "Kategori yok"} · {item.memberCount || item.members?.length || 0} katılımcı</span>
-                      <small>{formatAdminDate(item.createdAt || item.eventDate)}</small>
-                    </li>
-                  ))}
-                </ul>
+            />
+            <PagedActivityList
+              title="Son oluşturulan etkinlikler"
+              items={recentEvents}
+              empty="Henüz etkinlik yok."
+              renderItem={(item) => (
+                <li key={`${item.source}-${item.id}`}>
+                  <strong>{item.title || "İsimsiz etkinlik"}</strong>
+                  <span>{item.category || "Kategori yok"} · {item.memberCount || item.members?.length || 0} katılımcı</span>
+                  <small>{formatAdminDate(item.createdAt || item.eventDate)}</small>
+                </li>
               )}
-            </div>
-            <div className="cloop-admin-panel">
-              <h2>Yeni şikayetler</h2>
-              {recentReports.length === 0 ? <p>Yeni şikayet yok.</p> : (
-                <ul className="cloop-admin-history">
-                  {recentReports.map((r) => (
-                    <li key={r.id}>
-                      <strong>{r.reportedUserEmail || r.reportedUserId || "Bilinmiyor"}</strong>
-                      <span>{r.messageText || r.reason || "Detay yok"}</span>
-                      <small>{r.status || "Bekliyor"} · {formatAdminDate(r.createdAt)}</small>
-                    </li>
-                  ))}
-                </ul>
+            />
+            <PagedActivityList
+              title="Yeni şikayetler"
+              items={recentReports}
+              empty="Yeni şikayet yok."
+              renderItem={(r) => (
+                <li key={r.id}>
+                  <strong>{r.reportedUserEmail || r.reportedUserId || "Bilinmiyor"}</strong>
+                  <span>{r.messageText || r.reason || "Detay yok"}</span>
+                  <small>{r.status || "Bekliyor"} · {formatAdminDate(r.createdAt)}</small>
+                </li>
               )}
-            </div>
-            <div className="cloop-admin-panel">
-              <h2>Son admin işlemleri</h2>
-              {logs.length === 0 ? <p>Henüz kayıtlı admin işlemi yok.</p> : (
-                <ul className="cloop-admin-history">
-                  {logs.map((log) => (
-                    <li key={log.id}>
-                      <strong>{log.action}</strong>
-                      <span>{log.targetLabel || log.targetType || "Hedef yok"}</span>
-                      <small>{log.adminEmail || log.adminUid} · {formatAdminDate(log.createdAt)}</small>
-                    </li>
-                  ))}
-                </ul>
+            />
+            <PagedActivityList
+              title="Son admin işlemleri"
+              items={logs}
+              empty="Henüz kayıtlı admin işlemi yok."
+              renderItem={(log) => (
+                <li key={log.id}>
+                  <strong>{log.action}</strong>
+                  <span>{log.targetLabel || log.targetType || "Hedef yok"}</span>
+                  <small>{log.adminEmail || log.adminUid} · {formatAdminDate(log.createdAt)}</small>
+                </li>
               )}
-            </div>
+            />
           </div>
         </>
       )}
