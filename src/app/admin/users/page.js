@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, onSnapshot, updateDoc, doc } from "firebase/firestore";
+import { collection, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
 import { getEmailVerification } from "@/lib/adminDomain";
@@ -10,6 +10,11 @@ import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShe
 
 function isUserSuspended(user) {
   return Boolean(user.isSuspended || user.banned);
+}
+
+function isPendingApproval(user) {
+  if (isUserSuspended(user)) return false;
+  return user.status === "pending" || user.isApproved === false || user.approved === false;
 }
 
 export default function AdminUsersPage() {
@@ -83,6 +88,32 @@ function AdminUsersInner() {
       return matchesQuery && matchesStatus && matchesDate && matchesVerify;
     });
   }, [users, queryText, statusFilter, fromDate, verifyFilter]);
+
+  const approveUser = async (user) => {
+    if (!confirm(`${user.fullName || user.email} hesabını onaylamak istiyor musunuz?`)) return;
+    setBusyId(user.id);
+    try {
+      await updateDoc(doc(db, "users", user.id), {
+        approved: true,
+        isApproved: true,
+        status: "active",
+        approvedAt: serverTimestamp(),
+      });
+      await writeAdminLog({
+        action: "user_approve",
+        targetType: "user",
+        targetId: user.id,
+        targetLabel: user.email || user.fullName,
+        before: user.status || (user.approved === false ? "pending" : "unknown"),
+        after: "active",
+      });
+      alert("Hesap onaylandı. Kullanıcı artık uygulamaya girebilir.");
+    } catch (err) {
+      alert("Onaylanamadı: " + err.message);
+    } finally {
+      setBusyId("");
+    }
+  };
 
   const setSuspended = async (user, next) => {
     const actionLabel = next ? "askıya almak / engellemek" : "engeli kaldırmak";
@@ -161,6 +192,7 @@ function AdminUsersInner() {
             ) : (
               filtered.map((u) => {
                 const suspended = isUserSuspended(u);
+                const pending = isPendingApproval(u);
                 const counts = countsFor(u.id);
                 return (
                   <tr key={u.id}>
@@ -179,14 +211,24 @@ function AdminUsersInner() {
                       </span>
                     </td>
                     <td>
-                      <span className={`cloop-admin-badge ${suspended ? "is-warn" : "is-ok"}`}>
-                        {suspended ? "Askıda" : u.approved === false ? "Onay bekliyor" : "Aktif"}
+                      <span className={`cloop-admin-badge ${suspended ? "is-warn" : pending ? "is-warn" : "is-ok"}`}>
+                        {suspended ? "Askıda" : pending ? "Onay bekliyor" : "Aktif"}
                       </span>
                     </td>
                     <td className="cloop-admin-actions">
                       <button type="button" className="is-warn" onClick={() => router.push(`/admin/users/${u.id}`)}>
                         Detay
                       </button>
+                      {pending && (
+                        <button
+                          type="button"
+                          className="is-ok"
+                          disabled={busyId === u.id}
+                          onClick={() => approveUser(u)}
+                        >
+                          Hesabı Onayla
+                        </button>
+                      )}
                       {suspended ? (
                         <button
                           type="button"
