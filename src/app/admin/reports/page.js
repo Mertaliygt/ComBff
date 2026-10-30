@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { collection, deleteDoc, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
+import { priorityBadge, reportPriority } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate } from "@/components/admin/AdminShell";
 
 export default function AdminReportsPage() {
+  const router = useRouter();
   const [reports, setReports] = useState([]);
   const [busyId, setBusyId] = useState("");
 
@@ -87,6 +90,7 @@ export default function AdminReportsPage() {
             <tr>
               <th>Şikayet edilen</th>
               <th>İçerik / detay</th>
+              <th>Öncelik</th>
               <th>Tarih</th>
               <th>Durum</th>
               <th>İşlem</th>
@@ -95,18 +99,35 @@ export default function AdminReportsPage() {
           <tbody>
             {reports.length === 0 ? (
               <tr>
-                <td colSpan={5}>Şikayet bulunamadı.</td>
+                <td colSpan={6}>Şikayet bulunamadı.</td>
               </tr>
             ) : (
               reports.map((report) => (
                 <tr key={report.id}>
                   <td>
-                    <strong>{report.reportedUserEmail || report.reportedUserName || report.reportedUserId || "Bilinmiyor"}</strong>
+                    {report.reportedUserId ? (
+                      <button type="button" className="cloop-admin-link" onClick={() => router.push(`/admin/users/${report.reportedUserId}`)}>
+                        {report.reportedUserEmail || report.reportedUserName || report.reportedUserId}
+                      </button>
+                    ) : (
+                      <strong>{report.reportedUserEmail || report.reportedUserName || report.reportedUserId || "Bilinmiyor"}</strong>
+                    )}
                     <small>Bildiren: {report.reportedBy || "—"}</small>
                   </td>
                   <td>
                     <p className="cloop-admin-quote">“{report.messageText || report.content || report.reason || "Detay yok"}”</p>
-                    <small>{report.groupTitle || report.eventTitle || "İçerik"}</small>
+                    <small>
+                      {report.groupId ? (
+                        <button type="button" className="cloop-admin-link" onClick={() => router.push(`/admin/events/${report.groupId}?source=groups`)}>
+                          {report.groupTitle || "Etkinliğe git"}
+                        </button>
+                      ) : (report.groupTitle || report.eventTitle || "İçerik")}
+                    </small>
+                  </td>
+                  <td>
+                    <span className={`cloop-admin-badge ${priorityBadge(reportPriority(report))}`}>
+                      {reportPriority(report)}
+                    </span>
                   </td>
                   <td>{formatAdminDate(report.createdAt)}</td>
                   <td>

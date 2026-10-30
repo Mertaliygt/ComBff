@@ -15,6 +15,7 @@ export const ADMIN_NAV_GROUPS = [
       { id: "users", label: "Kullanıcılar", hint: "Üye yönetimi" },
       { id: "events", label: "Etkinlikler", hint: "Kullanıcı etkinlikleri" },
       { id: "reports", label: "Şikayetler", hint: "Moderasyon kuyruğu" },
+      { id: "safety", label: "Güvenlik Merkezi", hint: "Risk ve inceleme" },
       { id: "categories", label: "Kategoriler", hint: "Etkinlik kategorileri" },
     ],
   },
@@ -31,6 +32,8 @@ export const ADMIN_NAV_GROUPS = [
     items: [
       { id: "staff", label: "Admin Yönetimi", hint: "Roller ve yetkiler" },
       { id: "logs", label: "İşlem Geçmişi", hint: "Audit kayıtları" },
+      { id: "system", label: "Sistem İzleme", hint: "Sağlık ve bakım" },
+      { id: "privacy", label: "Gizlilik", hint: "KVKK talepleri" },
       { id: "settings", label: "Ayarlar", hint: "Profil ve güvenlik" },
     ],
   },

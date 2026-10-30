@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { resizeAndConvertImage } from "@/utils/imageHelper";
 
@@ -39,6 +39,9 @@ export default function LoginPage() {
               setLoading(false);
               return;
             }
+            if (data.emailVerified !== user.emailVerified) {
+              updateDoc(doc(db, "users", user.uid), { emailVerified: user.emailVerified }).catch(() => {});
+            }
             router.push("/dashboard");
           }
         } catch (err) {
@@ -70,6 +73,11 @@ export default function LoginPage() {
             return;
           }
         }
+        if (userDoc.exists()) {
+          updateDoc(doc(db, "users", userCredential.user.uid), {
+            emailVerified: userCredential.user.emailVerified,
+          }).catch(() => {});
+        }
         router.push("/dashboard");
       } else {
         if (!gender) {
@@ -97,6 +105,7 @@ export default function LoginPage() {
           role: "user",
           approved: false, 
           banned: false,
+          emailVerified: false,
           messageCount: 0,
           createdAt: new Date()
         });

@@ -267,6 +267,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         }
         await updateDoc(groupRef, {
           members: arrayRemove(auth.currentUser.uid),
+          leftMembers: arrayUnion(auth.currentUser.uid),
           memberCount: Math.max(1, (group.memberCount || 1) - 1)
         });
         setIsMember(false);
@@ -285,9 +286,28 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
           return alert("Bu etkinliğe katılmak için profilinizde cinsiyet bilgisi zorunludur.");
         }
 
+        const liveSnap = await getDoc(groupRef);
+        const live = liveSnap.exists() ? liveSnap.data() : group;
+        const uid = auth.currentUser.uid;
+        const members = Array.isArray(live.members) ? live.members.filter(Boolean) : [];
+        const waitlist = Array.isArray(live.waitlist) ? live.waitlist.filter(Boolean) : [];
+        if (members.includes(uid)) {
+          return alert("Bu etkinliğe zaten katıldınız.");
+        }
+        if (waitlist.includes(uid)) {
+          return alert("Zaten bekleme listesindesiniz. Kontenjan açılınca ekleneceksiniz.");
+        }
+        const capacity = Number(live.capacity);
+        const atCapacity = Number.isFinite(capacity) && capacity > 0 && members.length >= capacity;
+        if (atCapacity) {
+          await updateDoc(groupRef, { waitlist: arrayUnion(uid) });
+          return alert("Kontenjan doldu. Bekleme listesine eklendiniz.");
+        }
+
         await updateDoc(groupRef, {
-          members: arrayUnion(auth.currentUser.uid),
-          memberCount: (group.memberCount || 0) + 1
+          members: arrayUnion(uid),
+          waitlist: arrayRemove(uid),
+          memberCount: members.length + 1
         });
         setIsMember(true);
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
+import { eventCapacity, participantLists } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate } from "@/components/admin/AdminShell";
 
 function isPendingEvent(item) {
@@ -16,6 +18,7 @@ function isBrandEvent(item) {
 }
 
 export default function AdminEventsPage() {
+  const router = useRouter();
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState("");
 
@@ -160,6 +163,7 @@ export default function AdminEventsPage() {
             <tr>
               <th>Etkinlik</th>
               <th>Kaynak</th>
+              <th>Katılım</th>
               <th>Tarih</th>
               <th>Durum</th>
               <th>İşlem</th>
@@ -168,7 +172,7 @@ export default function AdminEventsPage() {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={5}>Etkinlik bulunamadı.</td>
+                <td colSpan={6}>Etkinlik bulunamadı.</td>
               </tr>
             ) : (
               items.map((item) => {
@@ -183,6 +187,11 @@ export default function AdminEventsPage() {
                       </small>
                     </td>
                     <td>{item.source === "events" ? "events" : "groups"}</td>
+                    <td>
+                      {participantLists(item).members.length}
+                      {eventCapacity(item) ? ` / ${eventCapacity(item)}` : " / sınırsız"}
+                      {participantLists(item).waitlist.length ? ` · ${participantLists(item).waitlist.length} beklemede` : ""}
+                    </td>
                     <td>{formatAdminDate(item.eventDate || item.createdAt)}</td>
                     <td>
                       <span className={`cloop-admin-badge ${pending ? "is-warn" : item.status === "Reddedildi" ? "is-danger" : "is-ok"}`}>
@@ -190,6 +199,9 @@ export default function AdminEventsPage() {
                       </span>
                     </td>
                     <td className="cloop-admin-actions">
+                      <button type="button" className="is-warn" onClick={() => router.push(`/admin/events/${item.id}?source=${item.source}`)}>
+                        Detay
+                      </button>
                       {pending && (
                         <>
                           <button type="button" disabled={busyId === item.id} onClick={() => approve(item)}>

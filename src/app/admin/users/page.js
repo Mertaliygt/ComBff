@@ -1,10 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { collection, onSnapshot, updateDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
+import { getEmailVerification } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShell";
 
 function isUserSuspended(user) {
@@ -21,10 +22,12 @@ export default function AdminUsersPage() {
 
 function AdminUsersInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [queryText, setQueryText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [verifyFilter, setVerifyFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [busyId, setBusyId] = useState("");
 
@@ -69,9 +72,17 @@ function AdminUsersInner() {
         (statusFilter === "suspended" && suspended);
       const created = toDate(u.createdAt);
       const matchesDate = !fromDate || (created && created >= new Date(fromDate));
-      return matchesQuery && matchesStatus && matchesDate;
+      const emailState = getEmailVerification(u).status;
+      const matchesVerify =
+        verifyFilter === "all" ||
+        (verifyFilter === "verified" && emailState === "Doğrulandı") ||
+        (verifyFilter === "unverified" && emailState === "Doğrulanmadı") ||
+        (verifyFilter === "pending" && emailState === "Beklemede") ||
+        (verifyFilter === "unknown" && emailState === "Bilinmiyor") ||
+        (verifyFilter === "review" && u.reviewStatus === "İncelemede");
+      return matchesQuery && matchesStatus && matchesDate && matchesVerify;
     });
-  }, [users, queryText, statusFilter, fromDate]);
+  }, [users, queryText, statusFilter, fromDate, verifyFilter]);
 
   const setSuspended = async (user, next) => {
     const actionLabel = next ? "askıya almak / engellemek" : "engeli kaldırmak";
@@ -116,6 +127,14 @@ function AdminUsersInner() {
           <option value="pending">Askıda / onay bekliyor</option>
           <option value="suspended">Engelli</option>
         </select>
+        <select value={verifyFilter} onChange={(e) => setVerifyFilter(e.target.value)}>
+          <option value="all">Doğrulama: tümü</option>
+          <option value="verified">E-posta doğrulandı</option>
+          <option value="unverified">E-posta doğrulanmadı</option>
+          <option value="pending">Beklemede</option>
+          <option value="unknown">Durum bilinmiyor</option>
+          <option value="review">İncelemede</option>
+        </select>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         <span>{filtered.length} kullanıcı</span>
       </div>
@@ -129,6 +148,7 @@ function AdminUsersInner() {
               <th>Kayıt</th>
               <th>Oluşturduğu</th>
               <th>Katıldığı</th>
+              <th>E-posta doğrulama</th>
               <th>Durum</th>
               <th>İşlem</th>
             </tr>
@@ -136,7 +156,7 @@ function AdminUsersInner() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7}>Kullanıcı bulunamadı.</td>
+                <td colSpan={8}>Kullanıcı bulunamadı.</td>
               </tr>
             ) : (
               filtered.map((u) => {
@@ -154,11 +174,19 @@ function AdminUsersInner() {
                     <td>{counts.created}</td>
                     <td>{counts.joined}</td>
                     <td>
+                      <span className={`cloop-admin-badge ${getEmailVerification(u).badge}`}>
+                        {getEmailVerification(u).status}
+                      </span>
+                    </td>
+                    <td>
                       <span className={`cloop-admin-badge ${suspended ? "is-warn" : "is-ok"}`}>
                         {suspended ? "Askıda" : u.approved === false ? "Onay bekliyor" : "Aktif"}
                       </span>
                     </td>
-                    <td>
+                    <td className="cloop-admin-actions">
+                      <button type="button" className="is-warn" onClick={() => router.push(`/admin/users/${u.id}`)}>
+                        Detay
+                      </button>
                       {suspended ? (
                         <button
                           type="button"
