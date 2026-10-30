@@ -18,7 +18,8 @@ function isBrandEvent(item) {
 }
 
 function eventLane(item) {
-  if (item.status === "Reddedildi" || item.status === "Yayından Alındı") return "other";
+  if (item.status === "Yayından Alındı") return "hidden";
+  if (item.status === "Reddedildi") return "other";
   if (isPendingEvent(item)) return "pending";
   if (isEventPast(item)) return "done";
   return "active";
@@ -26,10 +27,10 @@ function eventLane(item) {
 
 function eventLaneLabel(item) {
   const lane = eventLane(item);
+  if (lane === "hidden") return "Gizli";
   if (lane === "done") return "Tamamlandı";
   if (lane === "pending") return "Onay bekliyor";
   if (item.status === "Reddedildi") return "Reddedildi";
-  if (item.status === "Yayından Alındı") return "Yayından alındı";
   return "Aktif";
 }
 
@@ -37,7 +38,8 @@ function laneOrder(lane) {
   if (lane === "active") return 0;
   if (lane === "done") return 1;
   if (lane === "pending") return 2;
-  return 3;
+  if (lane === "hidden") return 3;
+  return 4;
 }
 
 export default function AdminEventsPage() {
@@ -150,6 +152,41 @@ export default function AdminEventsPage() {
     }
   };
 
+  const toggleVisibility = async (item) => {
+    const hidden = item.status === "Yayından Alındı";
+    const actionLabel = hidden ? "yeniden yayına almak" : "yayından gizlemek";
+    if (!confirm(`"${item.title || "Etkinlik"}" etkinliğini ${actionLabel} istiyor musunuz? Kayıt silinmez.`)) return;
+    const reason = window.prompt("İşlem gerekçesi") || (hidden ? "Yeniden yayın" : "Yayından gizlendi");
+    setBusyId(item.id);
+    try {
+      await updateDoc(doc(db, item.source, item.id), hidden
+        ? { status: "Aktif", isApproved: true }
+        : { status: "Yayından Alındı", isApproved: false }
+      );
+      await notifyOwner(
+        item,
+        hidden ? "Etkinliğin Yeniden Yayında" : "Etkinliğin Gizlendi",
+        hidden
+          ? `"${item.title || "Etkinlik"}" yeniden yayına alındı.`
+          : `"${item.title || "Etkinlik"}" yönetim tarafından gizlendi.`,
+        hidden ? "group_approved" : "group_removed"
+      );
+      await writeAdminLog({
+        action: hidden ? "event_unhide" : "event_hide",
+        targetType: "event",
+        targetId: item.id,
+        targetLabel: item.title,
+        reason,
+        before: item.status || "Aktif",
+        after: hidden ? "Aktif" : "Yayından Alındı",
+      });
+    } catch (err) {
+      alert("Yayın durumu güncellenemedi: " + err.message);
+    } finally {
+      setBusyId("");
+    }
+  };
+
   const toggleChat = async (item) => {
     const closed = item.chatStatus === "Kapalı";
     const next = closed ? "Açık" : "Kapalı";
@@ -176,8 +213,8 @@ export default function AdminEventsPage() {
   };
 
   const remove = async (item) => {
-    if (!confirm("Etkinliği tamamen yayından kaldırmak istiyor musunuz?")) return;
-    const reason = window.prompt("Yayından kaldırma gerekçesi");
+    if (!confirm("Bu işlem geri alınamaz. Etkinliği kalıcı olarak silmek istiyor musunuz?")) return;
+    const reason = window.prompt("Kalıcı silme gerekçesi");
     if (!reason) return;
     setBusyId(item.id);
     try {
@@ -216,6 +253,7 @@ export default function AdminEventsPage() {
           <option value="active">Aktif</option>
           <option value="done">Tamamlandı</option>
           <option value="pending">Onay bekliyor</option>
+          <option value="hidden">Gizli</option>
         </select>
         <span>{visible.length} etkinlik</span>
       </div>
@@ -224,7 +262,6 @@ export default function AdminEventsPage() {
           <thead>
             <tr>
               <th>Etkinlik</th>
-              <th>Kaynak</th>
               <th>Katılım</th>
               <th>Tarih</th>
               <th>Durum</th>
@@ -234,17 +271,18 @@ export default function AdminEventsPage() {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={6}>Etkinlik bulunamadı.</td>
+                <td colSpan={5}>Etkinlik bulunamadı.</td>
               </tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td colSpan={6}>Bu filtrede etkinlik yok.</td>
+                <td colSpan={5}>Bu filtrede etkinlik yok.</td>
               </tr>
             ) : (
               visible.map((item) => {
                 const pending = isPendingEvent(item);
                 const lane = eventLane(item);
                 const chatClosed = item.chatStatus === "Kapalı";
+                const hidden = item.status === "Yayından Alındı";
                 return (
                   <tr key={`${item.source}-${item.id}`}>
                     <td>
@@ -254,7 +292,6 @@ export default function AdminEventsPage() {
                         {item.locationAddress ? ` · ${item.locationAddress}` : ""}
                       </small>
                     </td>
-                    <td>{item.source === "events" ? "events" : "groups"}</td>
                     <td>
                       {participantLists(item).members.length}
                       {eventCapacity(item) ? ` / ${eventCapacity(item)}` : " / sınırsız"}
@@ -279,6 +316,14 @@ export default function AdminEventsPage() {
                       >
                         {chatClosed ? "Sohbeti aç" : "Sohbeti durdur"}
                       </button>
+                      <button
+                        type="button"
+                        className={hidden ? "is-ok" : "is-warn"}
+                        disabled={busyId === item.id}
+                        onClick={() => toggleVisibility(item)}
+                      >
+                        {hidden ? "Yayına al" : "Yayından gizle"}
+                      </button>
                       {pending && (
                         <>
                           <button type="button" disabled={busyId === item.id} onClick={() => approve(item)}>
@@ -290,7 +335,7 @@ export default function AdminEventsPage() {
                         </>
                       )}
                       <button type="button" className="is-danger" disabled={busyId === item.id} onClick={() => remove(item)}>
-                        Yayından Kaldır
+                        Kalıcı sil
                       </button>
                     </td>
                   </tr>
