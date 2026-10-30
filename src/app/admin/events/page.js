@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
-import { eventCapacity, participantLists } from "@/lib/adminDomain";
+import { eventCapacity, participantLists, sortEventsBySchedule } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate } from "@/components/admin/AdminShell";
 
 function isPendingEvent(item) {
@@ -30,7 +30,7 @@ export default function AdminEventsPage() {
     let events = [];
 
     const publish = () => {
-      setItems([...groups, ...events].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "tr")));
+      setItems(sortEventsBySchedule([...groups, ...events]));
     };
 
     const unsubGroups = onSnapshot(collection(db, "groups"), (snap) => {

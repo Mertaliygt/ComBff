@@ -66,30 +66,66 @@ function AdminEventDetailInner() {
   const [tab, setTab] = useState("genel");
   const [capacityInput, setCapacityInput] = useState("");
   const [missing, setMissing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setMissing(true);
+      setLoading(false);
+      return;
+    }
     let unsubDoc = () => {};
     let cancelled = false;
+    setLoading(true);
+    setLoadError("");
+    setMissing(false);
+    setItem(null);
 
     async function attach() {
-      const first = preferred === "events" ? "events" : "groups";
-      const second = first === "groups" ? "events" : "groups";
-      const snap = await getDoc(doc(db, first, id));
-      if (cancelled) return;
-      const chosen = snap.exists() ? first : second;
-      setSource(chosen);
-      unsubDoc = onSnapshot(doc(db, chosen, id), (docSnap) => {
-        if (!docSnap.exists()) {
+      try {
+        const first = preferred === "events" ? "events" : "groups";
+        const second = first === "groups" ? "events" : "groups";
+        const [snapA, snapB] = await Promise.all([
+          getDoc(doc(db, first, String(id))),
+          getDoc(doc(db, second, String(id))),
+        ]);
+        if (cancelled) return;
+        const chosen = snapA.exists() ? first : snapB.exists() ? second : null;
+        if (!chosen) {
           setMissing(true);
           setItem(null);
+          setLoading(false);
           return;
         }
-        const data = { id: docSnap.id, ...docSnap.data() };
-        setMissing(false);
-        setItem(data);
-        setCapacityInput(data.capacity ? String(data.capacity) : "");
-      });
+        setSource(chosen);
+        unsubDoc = onSnapshot(
+          doc(db, chosen, String(id)),
+          (docSnap) => {
+            if (!docSnap.exists()) {
+              setMissing(true);
+              setItem(null);
+              setLoading(false);
+              return;
+            }
+            const data = { id: docSnap.id, ...docSnap.data() };
+            setMissing(false);
+            setLoadError("");
+            setItem(data);
+            setCapacityInput(data.capacity ? String(data.capacity) : "");
+            setLoading(false);
+          },
+          (err) => {
+            setLoadError(err.message || "Etkinlik dinlenemedi.");
+            setLoading(false);
+          }
+        );
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err.message || "Etkinlik yüklenemedi.");
+          setLoading(false);
+        }
+      }
     }
 
     attach();
@@ -148,7 +184,7 @@ function AdminEventDetailInner() {
     if (!reason) return;
     await mutate(
       { status: "Yayından Alındı", isApproved: false },
-      { action: "event_unpublish", reason, before: item.status, after: "Yayından Alındı" }
+      { action: "event_unpublish", reason, before: item?.status, after: "Yayından Alındı" }
     );
   };
 
@@ -157,7 +193,7 @@ function AdminEventDetailInner() {
     const reason = window.prompt("Gerekçe") || "Yeniden yayın";
     await mutate(
       { status: "Aktif", isApproved: true },
-      { action: "event_republish", reason, before: item.status, after: "Aktif" }
+      { action: "event_republish", reason, before: item?.status, after: "Aktif" }
     );
   };
 
@@ -211,11 +247,71 @@ function AdminEventDetailInner() {
     );
   };
 
-  return (
+  const frame = (body) => (
     <AdminShell active="events">
       <button type="button" className="cloop-admin-link" onClick={() => router.push("/admin/events")}>← Etkinlik listesi</button>
-      {missing ? <p>Etkinlik bulunamadı.</p> : !item ? <p>Etkinlik yükleniyor...</p> : (
-        <>
+      {body}
+    </AdminShell>
+  );
+
+  if (loadError) {
+    return frame(<p className="cloop-admin-alert is-error">Etkinlik yüklenemedi: {loadError}</p>);
+  }
+  if (loading) {
+    return frame(<p>Etkinlik yükleniyor...</p>);
+  }
+  if (missing || !item) {
+    return frame(<p>Etkinlik bulunamadı.</p>);
+  }
+
+  return frame(
+    <EventDetailView
+      item={item}
+      users={users}
+      lists={lists}
+      capacity={capacity}
+      tab={tab}
+      setTab={setTab}
+      router={router}
+      eventReports={eventReports}
+      decisions={decisions}
+      capacityInput={capacityInput}
+      setCapacityInput={setCapacityInput}
+      unpublish={unpublish}
+      republish={republish}
+      markReview={markReview}
+      saveCapacity={saveCapacity}
+      removeMember={removeMember}
+      promoteWaitlist={promoteWaitlist}
+    />
+  );
+}
+
+function EventDetailView({
+  item,
+  users,
+  lists,
+  capacity,
+  tab,
+  setTab,
+  router,
+  eventReports,
+  decisions,
+  capacityInput,
+  setCapacityInput,
+  unpublish,
+  republish,
+  markReview,
+  saveCapacity,
+  removeMember,
+  promoteWaitlist,
+}) {
+  if (!item) return <p>Etkinlik bulunamadı.</p>;
+  const eventStatus = item.status;
+  const unpublished = eventStatus === "Yayından Alındı" || eventStatus === "Reddedildi";
+
+  return (
+    <>
           <div className="cloop-admin-tabs">
             <button type="button" className={tab === "genel" ? "is-active" : undefined} onClick={() => setTab("genel")}>Genel</button>
             <button type="button" className={tab === "katilimcilar" ? "is-active" : undefined} onClick={() => setTab("katilimcilar")}>Katılımcılar</button>
@@ -231,11 +327,11 @@ function AdminEventDetailInner() {
               <p>Kategori: {item.category || "—"}</p>
               <p>Tarih: {formatAdminDate(item.eventDate || item.createdAt)}</p>
               <p>Konum: {item.locationAddress || "—"}</p>
-              <p>Durum: {item.status || "—"}</p>
+              <p>Durum: {eventStatus || "—"}</p>
               <p>Oluşturulma: {formatAdminDate(item.createdAt)}</p>
               <p>Katılımcı: {lists.members.length} / {capacity || "sınırsız"}</p>
               <div className="cloop-admin-actions" style={{ marginTop: 12 }}>
-                {item.status === "Yayından Alındı" || item.status === "Reddedildi" ? (
+                {unpublished ? (
                   <button type="button" onClick={republish}>Yeniden yayına al</button>
                 ) : (
                   <button type="button" className="is-danger" onClick={unpublish}>Geçici yayından kaldır</button>
@@ -332,7 +428,5 @@ function AdminEventDetailInner() {
             </>
           )}
         </>
-      )}
-    </AdminShell>
   );
 }
