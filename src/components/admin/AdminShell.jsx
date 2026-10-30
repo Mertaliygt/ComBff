@@ -1,0 +1,89 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { collection, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { rejectNonAdminSession, requireAdminProfile } from "@/lib/adminAuth";
+import AdminLayout from "@/components/admin/AdminLayout";
+
+export default function AdminShell({ active, children }) {
+  const router = useRouter();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [pendingReports, setPendingReports] = useState(0);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        router.replace("/admin/login");
+        return;
+      }
+      const adminProfile = await requireAdminProfile(user);
+      if (!adminProfile) {
+        await rejectNonAdminSession();
+        router.replace("/admin/login");
+        return;
+      }
+      setProfile(adminProfile);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [router]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const unsub = onSnapshot(collection(db, "reports"), (snapshot) => {
+      let count = 0;
+      snapshot.forEach((docSnap) => {
+        if ((docSnap.data().status || "Bekliyor") === "Bekliyor") count += 1;
+      });
+      setPendingReports(count);
+    });
+    return () => unsub();
+  }, [profile]);
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    router.replace("/admin/login");
+  };
+
+  const handleNavigate = (id) => {
+    router.push(id === "dashboard" ? "/admin" : `/admin/${id}`);
+  };
+
+  if (loading || !profile) {
+    return (
+      <div className="cloop-admin-login">
+        <p className="cloop-admin-login-status">Yönetim paneli hazırlanıyor...</p>
+      </div>
+    );
+  }
+
+  return (
+    <AdminLayout
+      profile={profile}
+      active={active}
+      pendingReports={pendingReports}
+      onNavigate={handleNavigate}
+      onLogout={handleLogout}
+    >
+      {children}
+    </AdminLayout>
+  );
+}
+
+export function formatAdminDate(value) {
+  if (!value) return "—";
+  const date = value?.toDate ? value.toDate() : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+}
+
+export function toDate(value) {
+  if (!value) return null;
+  if (value?.toDate) return value.toDate();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}

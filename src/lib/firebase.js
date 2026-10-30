@@ -1,4 +1,5 @@
 // src/lib/firebase.js
+// Cloop web + Super-Admin paneli: mobil uygulama ile aynı Firebase projesi.
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
