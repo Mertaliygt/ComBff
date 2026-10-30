@@ -72,6 +72,20 @@ export function userLabel(user, fallback = "Bilinmeyen kullanıcı") {
   return user.fullName || user.email || user.id || fallback;
 }
 
+export function instagramBeyan(user) {
+  const raw = String(user?.instagram || "").trim();
+  if (!raw) return { handle: "", href: "" };
+  const handle = raw
+    .replace(/^@/, "")
+    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/\/+$/, "")
+    .split("?")[0];
+  return {
+    handle: handle || raw,
+    href: handle ? `https://instagram.com/${handle}` : "",
+  };
+}
+
 export function parseEventSchedule(value) {
   if (!value) return null;
   if (typeof value.toDate === "function") {

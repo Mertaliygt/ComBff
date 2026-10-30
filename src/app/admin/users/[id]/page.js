@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
-import { getEmailVerification, getPhoneVerification, userLabel } from "@/lib/adminDomain";
+import { getEmailVerification, getPhoneVerification, instagramBeyan, userLabel } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShell";
 
 export default function AdminUserDetailPage() {
@@ -107,6 +107,14 @@ export default function AdminUserDetailPage() {
           <div className="cloop-admin-panel" style={{ marginTop: 16 }}>
             <h2>{userLabel(user)}</h2>
             <p>E-posta: {user.email || "—"}</p>
+            <p>
+              Instagram beyanı:{" "}
+              {instagramBeyan(user).href ? (
+                <a className="cloop-admin-link" href={instagramBeyan(user).href} target="_blank" rel="noreferrer">
+                  @{instagramBeyan(user).handle}
+                </a>
+              ) : (user.instagram || "beyan yok")}
+            </p>
             <p>Üyelik: {formatAdminDate(user.createdAt)}</p>
             <p>Rol: {user.role || "user"}</p>
             <p>Hesap: {user.banned || user.isSuspended ? "Askıda / engelli" : user.approved === false ? "Onay bekliyor" : "Aktif"}</p>

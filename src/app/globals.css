@@ -358,5 +358,5 @@
 .cloop-admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
 .cloop-admin-tabs button { min-height: 40px; border: 1px solid var(--cloop-line); border-radius: 10px; padding: 0 14px; background: #1E1E24; color: var(--cloop-ink); font-weight: 700; }
 .cloop-admin-tabs button.is-active { background: #7c3aed2e; border-color: var(--cloop-violet); color: #d9c8ff; }
-.cloop-admin-link { background: none; border: 0; padding: 0; color: #c4b5fd; font-weight: 700; cursor: pointer; text-align: left; }
+.cloop-admin-link { background: none; border: 0; padding: 0; color: #c4b5fd; font-weight: 700; cursor: pointer; text-align: left; text-decoration: none; }
 .cloop-admin-cover { width: 100%; max-height: 220px; object-fit: cover; border-radius: 14px; margin-bottom: 12px; }

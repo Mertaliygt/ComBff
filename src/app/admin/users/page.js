@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
-import { getEmailVerification } from "@/lib/adminDomain";
+import { getEmailVerification, instagramBeyan } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShell";
 
 function isUserSuspended(user) {
@@ -90,7 +90,8 @@ function AdminUsersInner() {
   }, [users, queryText, statusFilter, fromDate, verifyFilter]);
 
   const approveUser = async (user) => {
-    if (!confirm(`${user.fullName || user.email} hesabını onaylamak istiyor musunuz?`)) return;
+    const ig = instagramBeyan(user);
+    if (!confirm(`${user.fullName || user.email} hesabını onaylamak istiyor musunuz?\nInstagram beyanı: ${ig.handle || "yok"}`)) return;
     setBusyId(user.id);
     try {
       await updateDoc(doc(db, "users", user.id), {
@@ -176,6 +177,7 @@ function AdminUsersInner() {
             <tr>
               <th>Kullanıcı</th>
               <th>E-posta</th>
+              <th>Instagram</th>
               <th>Kayıt</th>
               <th>Oluşturduğu</th>
               <th>Katıldığı</th>
@@ -187,13 +189,14 @@ function AdminUsersInner() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={8}>Kullanıcı bulunamadı.</td>
+                <td colSpan={9}>Kullanıcı bulunamadı.</td>
               </tr>
             ) : (
               filtered.map((u) => {
                 const suspended = isUserSuspended(u);
                 const pending = isPendingApproval(u);
                 const counts = countsFor(u.id);
+                const ig = instagramBeyan(u);
                 return (
                   <tr key={u.id}>
                     <td>
@@ -202,6 +205,13 @@ function AdminUsersInner() {
                       <small>{u.role || "user"}</small>
                     </td>
                     <td>{u.email || "—"}</td>
+                    <td>
+                      {ig.href ? (
+                        <a className="cloop-admin-link" href={ig.href} target="_blank" rel="noreferrer">
+                          @{ig.handle}
+                        </a>
+                      ) : (u.instagram || "—")}
+                    </td>
                     <td>{formatAdminDate(u.createdAt)}</td>
                     <td>{counts.created}</td>
                     <td>{counts.joined}</td>
