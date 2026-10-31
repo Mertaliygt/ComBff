@@ -81,6 +81,17 @@ export function formatAdminDate(value) {
   return date.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
 }
 
+export function AdminPager({ page, pages, onPage }) {
+  if (pages <= 1) return null;
+  return (
+    <div className="cloop-admin-pager">
+      <button type="button" disabled={page <= 0} onClick={() => onPage(page - 1)}>Önceki</button>
+      <span>{page + 1} / {pages}</span>
+      <button type="button" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>Sonraki</button>
+    </div>
+  );
+}
+
 export function toDate(value) {
   if (!value) return null;
   if (value?.toDate) return value.toDate();

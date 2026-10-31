@@ -26,14 +26,14 @@ function isActiveEvent(item) {
 const ACTIVITY_PAGE_SIZE = 8;
 const ACTIVITY_LIMIT = 24;
 
-function PagedActivityList({ title, items, empty, renderItem }) {
+function PagedActivityList({ title, items, empty, renderItem, tone = "" }) {
   const [page, setPage] = useState(0);
   const pages = Math.max(1, Math.ceil(items.length / ACTIVITY_PAGE_SIZE));
   const current = Math.min(page, pages - 1);
   const slice = items.slice(current * ACTIVITY_PAGE_SIZE, current * ACTIVITY_PAGE_SIZE + ACTIVITY_PAGE_SIZE);
 
   return (
-    <div className="cloop-admin-panel">
+    <div className={`cloop-admin-panel${tone ? ` is-${tone}` : ""}`}>
       <h2>{title}</h2>
       {items.length === 0 ? <p>{empty}</p> : (
         <>
@@ -53,10 +53,10 @@ function PagedActivityList({ title, items, empty, renderItem }) {
   );
 }
 
-function ChartList({ title, items, empty }) {
+function ChartList({ title, items, empty, tone = "" }) {
   const max = Math.max(...items.map((i) => i.value), 1);
   return (
-    <div className="cloop-admin-panel">
+    <div className={`cloop-admin-panel${tone ? ` is-${tone}` : ""}`}>
       <h2>{title}</h2>
       {items.every((i) => i.value === 0) ? (
         <p>{empty}</p>
@@ -66,7 +66,7 @@ function ChartList({ title, items, empty }) {
             <div key={item.label} className="cloop-chart-row">
               <span>{item.label}</span>
               <div className="cloop-chart-track">
-                <div className="cloop-chart-bar" style={{ width: `${(item.value / max) * 100}%` }} />
+                <div className={`cloop-chart-bar${tone ? ` is-${tone}` : ""}`} style={{ width: `${(item.value / max) * 100}%` }} />
               </div>
               <b>{item.value}</b>
             </div>
@@ -225,13 +225,13 @@ export default function AdminDashboardPage() {
   }, [events]);
 
   const cards = [
-    { label: "Çevrimiçi", value: onlineCount, href: "/admin/users", live: true },
-    { label: "Toplam kullanıcı", value: stats.users, href: "/admin/users" },
-    { label: "Aktif kullanıcı", value: stats.activeUsers, href: "/admin/users" },
-    { label: "Günlük yeni kayıt", value: stats.dailySignups, href: "/admin/users" },
-    { label: "Toplam etkinlik", value: stats.events, href: "/admin/events" },
-    { label: "Aktif etkinlik", value: stats.activeEvents, href: "/admin/events" },
-    { label: "Bekleyen şikayet", value: stats.pendingReports, href: "/admin/reports" },
+    { label: "Çevrimiçi", value: onlineCount, href: "/admin/users", live: true, tone: "mint" },
+    { label: "Toplam kullanıcı", value: stats.users, href: "/admin/users", tone: "sky" },
+    { label: "Aktif kullanıcı", value: stats.activeUsers, href: "/admin/users", tone: "lime" },
+    { label: "Günlük yeni kayıt", value: stats.dailySignups, href: "/admin/users", tone: "amber" },
+    { label: "Toplam etkinlik", value: stats.events, href: "/admin/events", tone: "violet" },
+    { label: "Aktif etkinlik", value: stats.activeEvents, href: "/admin/events", tone: "cyan" },
+    { label: "Bekleyen şikayet", value: stats.pendingReports, href: "/admin/reports", tone: "rose" },
   ];
 
   const recentUsers = [...users]
@@ -253,7 +253,7 @@ export default function AdminDashboardPage() {
         <>
           <div className="cloop-admin-grid">
             {cards.map((card) => (
-              <button key={card.label} type="button" className={`cloop-stat-card${card.live ? " is-live" : ""}`} onClick={() => router.push(card.href)}>
+              <button key={card.label} type="button" className={`cloop-stat-card${card.live ? " is-live" : ""}${card.tone ? ` is-${card.tone}` : ""}`} onClick={() => router.push(card.href)}>
                 <span>{card.label}</span>
                 <strong>{card.value}</strong>
               </button>
@@ -261,10 +261,10 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="cloop-admin-split">
-            <ChartList title="Son 7 gün kullanıcı kaydı" items={userChart} empty="Bu aralıkta yeni kayıt yok." />
-            <ChartList title="Son 7 gün etkinlik oluşturma" items={eventChart} empty="Bu aralıkta yeni etkinlik yok." />
-            <ChartList title="Kategori dağılımı" items={categoryChart} empty="Kategori verisi yok." />
-            <ChartList title="Katılım dağılımı" items={joinChart} empty="Katılım verisi yok." />
+            <ChartList title="Son 7 gün kullanıcı kaydı" items={userChart} empty="Bu aralıkta yeni kayıt yok." tone="sky" />
+            <ChartList title="Son 7 gün etkinlik oluşturma" items={eventChart} empty="Bu aralıkta yeni etkinlik yok." tone="violet" />
+            <ChartList title="Kategori dağılımı" items={categoryChart} empty="Kategori verisi yok." tone="amber" />
+            <ChartList title="Katılım dağılımı" items={joinChart} empty="Katılım verisi yok." tone="cyan" />
           </div>
 
           <div className="cloop-admin-rail">
@@ -272,6 +272,7 @@ export default function AdminDashboardPage() {
               title="Son kayıt olan kullanıcılar"
               items={recentUsers}
               empty="Henüz kullanıcı yok."
+              tone="sky"
               renderItem={(u) => (
                 <li key={u.id}>
                   <strong>{u.fullName || "İsimsiz"}</strong>
@@ -284,6 +285,7 @@ export default function AdminDashboardPage() {
               title="Son oluşturulan etkinlikler"
               items={recentEvents}
               empty="Henüz etkinlik yok."
+              tone="violet"
               renderItem={(item) => (
                 <li key={`${item.source}-${item.id}`}>
                   <strong>{item.title || "İsimsiz etkinlik"}</strong>
@@ -296,6 +298,7 @@ export default function AdminDashboardPage() {
               title="Yeni şikayetler"
               items={recentReports}
               empty="Yeni şikayet yok."
+              tone="rose"
               renderItem={(r) => (
                 <li key={r.id}>
                   <strong>{r.reportedUserEmail || r.reportedUserId || "Bilinmiyor"}</strong>
@@ -308,6 +311,7 @@ export default function AdminDashboardPage() {
               title="Son admin işlemleri"
               items={logs}
               empty="Henüz kayıtlı admin işlemi yok."
+              tone="amber"
               renderItem={(log) => (
                 <li key={log.id}>
                   <strong>{log.action}</strong>

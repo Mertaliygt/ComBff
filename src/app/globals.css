@@ -342,12 +342,31 @@
 .cloop-stat-card { text-align: left; background: var(--cloop-panel); border: 1px solid var(--cloop-line); border-radius: 18px; padding: 18px; color: inherit; cursor: pointer; }
 .cloop-stat-card span { color: var(--cloop-muted); font-size: 13px; }
 .cloop-stat-card strong { display: block; margin-top: 8px; font-size: 28px; }
-.cloop-stat-card:hover { border-color: var(--cloop-violet); }
+.cloop-stat-card:hover { border-color: var(--cloop-violet); transform: translateY(-1px); }
 .cloop-stat-card.is-live span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 4px #4ade8033; }
+.cloop-stat-card.is-mint, .cloop-admin-panel.is-mint { background: linear-gradient(160deg, #16653499 0%, var(--cloop-panel) 68%); border-color: #22c55e; }
+.cloop-stat-card.is-sky, .cloop-admin-panel.is-sky { background: linear-gradient(160deg, #0369a199 0%, var(--cloop-panel) 68%); border-color: #38bdf8; }
+.cloop-stat-card.is-lime, .cloop-admin-panel.is-lime { background: linear-gradient(160deg, #4d7c0f99 0%, var(--cloop-panel) 68%); border-color: #84cc16; }
+.cloop-stat-card.is-amber, .cloop-admin-panel.is-amber { background: linear-gradient(160deg, #b4530999 0%, var(--cloop-panel) 68%); border-color: #f59e0b; }
+.cloop-stat-card.is-violet, .cloop-admin-panel.is-violet { background: linear-gradient(160deg, #6d28d999 0%, var(--cloop-panel) 68%); border-color: #a78bfa; }
+.cloop-stat-card.is-cyan, .cloop-admin-panel.is-cyan { background: linear-gradient(160deg, #0e749099 0%, var(--cloop-panel) 68%); border-color: #22d3ee; }
+.cloop-stat-card.is-rose, .cloop-admin-panel.is-rose { background: linear-gradient(160deg, #be123c99 0%, var(--cloop-panel) 68%); border-color: #fb7185; }
+.cloop-stat-card.is-mint strong { color: #86efac; }
+.cloop-stat-card.is-sky strong { color: #7dd3fc; }
+.cloop-stat-card.is-lime strong { color: #bef264; }
+.cloop-stat-card.is-amber strong { color: #fcd34d; }
+.cloop-stat-card.is-violet strong { color: #ddd6fe; }
+.cloop-stat-card.is-cyan strong { color: #67e8f9; }
+.cloop-stat-card.is-rose strong { color: #fda4af; }
+.cloop-chart-bar.is-sky { background: #38bdf8; }
+.cloop-chart-bar.is-violet { background: #a78bfa; }
+.cloop-chart-bar.is-amber { background: #f59e0b; }
+.cloop-chart-bar.is-cyan { background: #22d3ee; }
 .cloop-admin-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 16px; }
 .cloop-admin-rail { display: flex; gap: 14px; overflow-x: auto; margin-top: 16px; padding-bottom: 8px; scroll-snap-type: x mandatory; }
 .cloop-admin-rail > .cloop-admin-panel { flex: 0 0 min(320px, 86vw); scroll-snap-align: start; }
 .cloop-admin-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; color: var(--cloop-muted); font-size: 12px; }
+.cloop-admin-table-wrap > .cloop-admin-pager { margin: 0; padding: 12px 14px; border-top: 1px solid var(--cloop-line); }
 .cloop-admin-pager button { min-height: 32px; border: 0; border-radius: 8px; padding: 0 10px; background: #7c3aed2e; color: var(--cloop-ink); font-weight: 700; }
 .cloop-admin-pager button:disabled { opacity: .45; }
 .cloop-chart { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }

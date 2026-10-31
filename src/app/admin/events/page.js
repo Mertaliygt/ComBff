@@ -6,7 +6,9 @@ import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, updateDoc } fro
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
 import { eventCapacity, isEventPast, participantLists, sortEventsBySchedule } from "@/lib/adminDomain";
-import AdminShell, { formatAdminDate } from "@/components/admin/AdminShell";
+import AdminShell, { AdminPager, formatAdminDate } from "@/components/admin/AdminShell";
+
+const TABLE_PAGE_SIZE = 15;
 
 function isPendingEvent(item) {
   if (item.source === "groups") return item.status === "Onay Bekliyor" || item.isApproved === false;
@@ -47,6 +49,7 @@ export default function AdminEventsPage() {
   const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState("");
   const [laneFilter, setLaneFilter] = useState("all");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const mapSnap = (snapshot, source) =>
@@ -80,6 +83,14 @@ export default function AdminEventsPage() {
     () => items.filter((item) => laneFilter === "all" || eventLane(item) === laneFilter),
     [items, laneFilter]
   );
+
+  useEffect(() => {
+    setPage(0);
+  }, [laneFilter]);
+
+  const pages = Math.max(1, Math.ceil(visible.length / TABLE_PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const paged = visible.slice(current * TABLE_PAGE_SIZE, current * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE);
 
   const notifyOwner = async (item, title, message, type) => {
     if (!item.createdBy || item.createdBy === "anonim") return;
@@ -255,7 +266,7 @@ export default function AdminEventsPage() {
           <option value="pending">Onay bekliyor</option>
           <option value="hidden">Gizli</option>
         </select>
-        <span>{visible.length} etkinlik</span>
+        <span>{visible.length} etkinlik · sayfa {current + 1}/{pages}</span>
       </div>
       <div className="cloop-admin-table-wrap">
         <table className="cloop-admin-table">
@@ -278,7 +289,7 @@ export default function AdminEventsPage() {
                 <td colSpan={5}>Bu filtrede etkinlik yok.</td>
               </tr>
             ) : (
-              visible.map((item) => {
+              paged.map((item) => {
                 const pending = isPendingEvent(item);
                 const lane = eventLane(item);
                 const chatClosed = item.chatStatus === "Kapalı";
@@ -344,6 +355,7 @@ export default function AdminEventsPage() {
             )}
           </tbody>
         </table>
+        <AdminPager page={current} pages={pages} onPage={setPage} />
       </div>
     </AdminShell>
   );

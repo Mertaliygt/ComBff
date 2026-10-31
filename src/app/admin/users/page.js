@@ -6,7 +6,9 @@ import { collection, onSnapshot, updateDoc, doc, serverTimestamp } from "firebas
 import { db } from "@/lib/firebase";
 import { writeAdminLog } from "@/lib/adminLog";
 import { getEmailVerification, instagramBeyan } from "@/lib/adminDomain";
-import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShell";
+import AdminShell, { AdminPager, formatAdminDate, toDate } from "@/components/admin/AdminShell";
+
+const TABLE_PAGE_SIZE = 15;
 
 function isUserSuspended(user) {
   return Boolean(user.isSuspended || user.banned);
@@ -35,6 +37,7 @@ function AdminUsersInner() {
   const [verifyFilter, setVerifyFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [busyId, setBusyId] = useState("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     setQueryText(searchParams.get("q") || "");
@@ -88,6 +91,14 @@ function AdminUsersInner() {
       return matchesQuery && matchesStatus && matchesDate && matchesVerify;
     });
   }, [users, queryText, statusFilter, fromDate, verifyFilter]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [queryText, statusFilter, verifyFilter, fromDate]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const paged = filtered.slice(current * TABLE_PAGE_SIZE, current * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE);
 
   const approveUser = async (user) => {
     const ig = instagramBeyan(user);
@@ -168,7 +179,7 @@ function AdminUsersInner() {
           <option value="review">İncelemede</option>
         </select>
         <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-        <span>{filtered.length} kullanıcı</span>
+        <span>{filtered.length} kullanıcı · sayfa {current + 1}/{pages}</span>
       </div>
 
       <div className="cloop-admin-table-wrap">
@@ -192,7 +203,7 @@ function AdminUsersInner() {
                 <td colSpan={9}>Kullanıcı bulunamadı.</td>
               </tr>
             ) : (
-              filtered.map((u) => {
+              paged.map((u) => {
                 const suspended = isUserSuspended(u);
                 const pending = isPendingApproval(u);
                 const counts = countsFor(u.id);
@@ -264,6 +275,7 @@ function AdminUsersInner() {
             )}
           </tbody>
         </table>
+        <AdminPager page={current} pages={pages} onPage={setPage} />
       </div>
     </AdminShell>
   );
