@@ -343,6 +343,7 @@
 .cloop-stat-card span { color: var(--cloop-muted); font-size: 13px; }
 .cloop-stat-card strong { display: block; margin-top: 8px; font-size: 28px; }
 .cloop-stat-card:hover { border-color: var(--cloop-violet); }
+.cloop-stat-card.is-live span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 4px #4ade8033; }
 .cloop-admin-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 16px; }
 .cloop-admin-rail { display: flex; gap: 14px; overflow-x: auto; margin-top: 16px; padding-bottom: 8px; scroll-snap-type: x mandatory; }
 .cloop-admin-rail > .cloop-admin-panel { flex: 0 0 min(320px, 86vw); scroll-snap-align: start; }

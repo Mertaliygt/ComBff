@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { isUserOnlineNow } from "@/lib/presence";
 import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShell";
 
 function startOfDay(date) {
@@ -84,6 +85,7 @@ export default function AdminDashboardPage() {
   const [events, setEvents] = useState([]);
   const [reports, setReports] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [onlineCount, setOnlineCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +124,24 @@ export default function AdminDashboardPage() {
 
     load();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const recount = (list) => {
+      const now = Date.now();
+      setOnlineCount(list.filter((user) => isUserOnlineNow(user, now)).length);
+    };
+
+    let usersLive = [];
+    const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
+      usersLive = snapshot.docs.map((d) => d.data());
+      recount(usersLive);
+    });
+    const tick = setInterval(() => recount(usersLive), 15000);
+    return () => {
+      unsub();
+      clearInterval(tick);
+    };
   }, []);
 
   const stats = useMemo(() => {
@@ -205,6 +225,7 @@ export default function AdminDashboardPage() {
   }, [events]);
 
   const cards = [
+    { label: "Çevrimiçi", value: onlineCount, href: "/admin/users", live: true },
     { label: "Toplam kullanıcı", value: stats.users, href: "/admin/users" },
     { label: "Aktif kullanıcı", value: stats.activeUsers, href: "/admin/users" },
     { label: "Günlük yeni kayıt", value: stats.dailySignups, href: "/admin/users" },
@@ -232,7 +253,7 @@ export default function AdminDashboardPage() {
         <>
           <div className="cloop-admin-grid">
             {cards.map((card) => (
-              <button key={card.label} type="button" className="cloop-stat-card" onClick={() => router.push(card.href)}>
+              <button key={card.label} type="button" className={`cloop-stat-card${card.live ? " is-live" : ""}`} onClick={() => router.push(card.href)}>
                 <span>{card.label}</span>
                 <strong>{card.value}</strong>
               </button>

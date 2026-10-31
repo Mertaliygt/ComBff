@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
+import { startPresence } from "@/lib/presence";
 import { doc, getDoc, updateDoc, collection, onSnapshot, deleteDoc, arrayUnion, query, orderBy, addDoc } from "firebase/firestore";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -273,6 +274,12 @@ function DashboardPageContent() {
 
     return () => unsubscribeAuth();
   }, [router]);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || !userData) return undefined;
+    return startPresence(uid);
+  }, [userData]);
 
   useEffect(() => {
     if (!auth.currentUser) return;
