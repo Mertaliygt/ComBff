@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { collection, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { canManageUsers, canWriteAdmin, useCurrentAdminRole } from "@/lib/adminAuth";
 import { writeAdminLog } from "@/lib/adminLog";
 import { getEmailVerification, getPhoneVerification, instagramBeyan, userLabel } from "@/lib/adminDomain";
 import AdminShell, { formatAdminDate, toDate } from "@/components/admin/AdminShell";
@@ -16,6 +17,9 @@ export default function AdminUserDetailPage() {
   const [reports, setReports] = useState([]);
   const [logs, setLogs] = useState([]);
   const [missing, setMissing] = useState(false);
+  const myRole = useCurrentAdminRole();
+  const canReview = canWriteAdmin(myRole);
+  const canModerate = canManageUsers(myRole);
 
   useEffect(() => {
     if (!id) return;
@@ -59,7 +63,7 @@ export default function AdminUserDetailPage() {
   );
 
   const setReview = async (next) => {
-    if (!user) return;
+    if (!user || !canReview) return;
     const reason = window.prompt(next ? "İncelemeye alma gerekçesi" : "İncelemeyi kapatma gerekçesi");
     if (!reason) return;
     try {
@@ -79,7 +83,7 @@ export default function AdminUserDetailPage() {
   };
 
   const setSuspended = async (next) => {
-    if (!user) return;
+    if (!user || !canModerate) return;
     if (!confirm(next ? "Kullanıcı askıya alınacak. Onaylıyor musunuz?" : "Engel kaldırılacak. Onaylıyor musunuz?")) return;
     const reason = next ? window.prompt("İşlem gerekçesi") : "Engel kaldırıldı";
     if (next && !reason) return;
@@ -124,14 +128,14 @@ export default function AdminUserDetailPage() {
             )}
             <div className="cloop-admin-actions" style={{ marginTop: 12 }}>
               {user.reviewStatus === "İncelemede" ? (
-                <button type="button" className="is-warn" onClick={() => setReview(false)}>İncelemeyi kapat</button>
+                <button type="button" className="is-warn" disabled={!canReview} onClick={() => setReview(false)}>İncelemeyi kapat</button>
               ) : (
-                <button type="button" className="is-warn" onClick={() => setReview(true)}>Şüpheli: incelemeye al</button>
+                <button type="button" className="is-warn" disabled={!canReview} onClick={() => setReview(true)}>Şüpheli: incelemeye al</button>
               )}
               {user.banned || user.isSuspended ? (
-                <button type="button" onClick={() => setSuspended(false)}>Engeli kaldır</button>
+                <button type="button" disabled={!canModerate} onClick={() => setSuspended(false)}>Engeli kaldır</button>
               ) : (
-                <button type="button" className="is-danger" onClick={() => setSuspended(true)}>Askıya al / Engelle</button>
+                <button type="button" className="is-danger" disabled={!canModerate} onClick={() => setSuspended(true)}>Askıya al / Engelle</button>
               )}
             </div>
           </div>

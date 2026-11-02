@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { db, auth } from "@/lib/firebase";
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove, getDoc, getDocs, increment, runTransaction } from "firebase/firestore";
 import { getUserTitle } from "@/app/dashboard/page";
 import { sendFollowRequest } from "@/lib/followService";
 import { fetchEventWeather, getAtmosphereFromWeather, estimateWeatherFallback } from "@/utils/weatherHelper";
@@ -232,7 +232,7 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
       const userDoc = await getDoc(userRef);
       const uData = userDoc.exists() ? userDoc.data() : {};
 
-      await updateDoc(userRef, { messageCount: (uData.messageCount || 0) + 1 });
+      await updateDoc(userRef, { messageCount: increment(1) });
 
       await addDoc(collection(db, "groups", group.id, "messages"), {
         text: newMessage,
@@ -265,10 +265,17 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
         if (chatLocked) {
           return alert("Tamamlanan etkinliklerden ayrılamazsınız. Sohbet kapalıdır.");
         }
-        await updateDoc(groupRef, {
-          members: arrayRemove(auth.currentUser.uid),
-          leftMembers: arrayUnion(auth.currentUser.uid),
-          memberCount: Math.max(1, (group.memberCount || 1) - 1)
+        const leaverUid = auth.currentUser.uid;
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(groupRef);
+          const current = Array.isArray(snap.data()?.members) ? snap.data().members : [];
+          if (!current.includes(leaverUid)) return;
+          const next = current.filter((id) => id !== leaverUid);
+          tx.update(groupRef, {
+            members: next,
+            leftMembers: arrayUnion(leaverUid),
+            memberCount: next.length,
+          });
         });
         setIsMember(false);
       } else {
@@ -286,29 +293,31 @@ export default function ChatModal({ group, onClose, onSwitchGroup, onShowOnMap }
           return alert("Bu etkinliğe katılmak için profilinizde cinsiyet bilgisi zorunludur.");
         }
 
-        const liveSnap = await getDoc(groupRef);
-        const live = liveSnap.exists() ? liveSnap.data() : group;
         const uid = auth.currentUser.uid;
-        const members = Array.isArray(live.members) ? live.members.filter(Boolean) : [];
-        const waitlist = Array.isArray(live.waitlist) ? live.waitlist.filter(Boolean) : [];
-        if (members.includes(uid)) {
-          return alert("Bu etkinliğe zaten katıldınız.");
-        }
-        if (waitlist.includes(uid)) {
-          return alert("Zaten bekleme listesindesiniz. Kontenjan açılınca ekleneceksiniz.");
-        }
-        const capacity = Number(live.capacity);
-        const atCapacity = Number.isFinite(capacity) && capacity > 0 && members.length >= capacity;
-        if (atCapacity) {
-          await updateDoc(groupRef, { waitlist: arrayUnion(uid) });
-          return alert("Kontenjan doldu. Bekleme listesine eklendiniz.");
-        }
-
-        await updateDoc(groupRef, {
-          members: arrayUnion(uid),
-          waitlist: arrayRemove(uid),
-          memberCount: members.length + 1
+        // Kontenjan kontrolü ve katılım tek transaction'da: eşzamanlı katılımlarda kontenjan aşılmaz.
+        const outcome = await runTransaction(db, async (tx) => {
+          const liveSnap = await tx.get(groupRef);
+          const live = liveSnap.exists() ? liveSnap.data() : group;
+          const members = Array.isArray(live.members) ? live.members : [];
+          const waitlist = Array.isArray(live.waitlist) ? live.waitlist : [];
+          if (members.includes(uid)) return "member";
+          if (waitlist.includes(uid)) return "waitlisted";
+          const rawCapacity = Number(live.maxCapacity ?? live.capacity ?? 20);
+          const capacity = Number.isFinite(rawCapacity) && rawCapacity > 0 ? Math.min(rawCapacity, 30) : 20;
+          if (members.length >= capacity) {
+            tx.update(groupRef, { waitlist: arrayUnion(uid) });
+            return "full";
+          }
+          tx.update(groupRef, {
+            members: [...members, uid],
+            waitlist: arrayRemove(uid),
+            memberCount: members.length + 1,
+          });
+          return "joined";
         });
+        if (outcome === "member") return alert("Bu etkinliğe zaten katıldınız.");
+        if (outcome === "waitlisted") return alert("Zaten bekleme listesindesiniz. Kontenjan açılınca ekleneceksiniz.");
+        if (outcome === "full") return alert("Kontenjan doldu. Bekleme listesine eklendiniz.");
         setIsMember(true);
 
         const randomMeme = memeList[Math.floor(Math.random() * memeList.length)];

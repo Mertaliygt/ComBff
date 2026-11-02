@@ -1,0 +1,447 @@
+rules_version = '2';
+
+// Cloop (ComBFF) Firestore güvenlik kuralları. Mobil (Flutter) ve web (Next.js) aynı projeyi kullanır.
+// Rol/onay/ban/puan gibi alanlar istemciden YAZILAMAZ: onay ve ban moderasyon rolleriyle, rol yalnızca
+// superadmin ile, puan/check-in ise Cloud Functions (Admin SDK) ile değişir.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- Yardımcılar
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasProfile() {
+      return signedIn() && exists(userPath(request.auth.uid));
+    }
+
+    function meData() {
+      return get(userPath(request.auth.uid)).data;
+    }
+
+    function myRole() {
+      return hasProfile() ? meData().get('role', 'user') : 'user';
+    }
+
+    function isSuperAdmin() {
+      return myRole() in ['superadmin', 'super-admin'];
+    }
+
+    // Kullanıcı silme / banlama yetkisi.
+    function isAdmin() {
+      return myRole() in ['superadmin', 'super-admin', 'admin'];
+    }
+
+    // Onay, moderasyon ve içerik yönetimi yetkisi.
+    function isStaff() {
+      return myRole() in ['superadmin', 'super-admin', 'admin', 'moderator', 'mod'];
+    }
+
+    // Admin paneline girebilen (salt okunur olanlar dahil) roller.
+    function isPanel() {
+      return myRole() in ['superadmin', 'super-admin', 'admin', 'moderator', 'mod', 'support', 'analyst'];
+    }
+
+    // Mobil `_readApproved` ile aynı mantık: approved/isApproved true ise onaylı; biri false veya
+    // status == 'pending' ise onay bekliyor; hiçbiri yoksa (eski kayıt) onaylı sayılır.
+    function approvedOf(d) {
+      return d.get('approved', null) == true
+        || d.get('isApproved', null) == true
+        || (d.get('approved', null) != false
+            && d.get('isApproved', null) != false
+            && d.get('status', '') != 'pending');
+    }
+
+    // Onaylı, banlı/askıda olmayan kullanıcı (yönetim rolleri her zaman aktif sayılır).
+    function activeUser() {
+      return hasProfile()
+        && meData().get('banned', false) != true
+        && meData().get('isSuspended', false) != true
+        && (approvedOf(meData()) || isStaff());
+    }
+
+    function roleOf(d) {
+      return d.get('role', 'user');
+    }
+
+    // ---------------------------------------------------------------- users
+    function userCreateKeys() {
+      return ['uid', 'email', 'fullName', 'age', 'gender', 'instagram', 'bio', 'showInsta', 'photoUrl',
+              'role', 'approved', 'isApproved', 'status', 'isProfileComplete', 'points', 'badges',
+              'banned', 'emailVerified', 'messageCount', 'interests', 'createdAt'];
+    }
+
+    // Kullanıcının kendi belgesinde değiştirebildiği alanlar (bio, instagram, photoUrl, interests, fcm...).
+    function ownerKeys() {
+      return ['bio', 'instagram', 'showInsta', 'photoUrl', 'interests', 'emailVerified',
+              'isOnline', 'lastSeen', 'messageCount',
+              'fcmToken', 'fcmTokens', 'notificationsEnabled', 'fcmPlatform', 'fcmUpdatedAt'];
+    }
+
+    // Yalnızca profil henüz tamamlanmamışken yazılabilen alanlar.
+    function profileKeys() {
+      return ['fullName', 'age', 'gender', 'isProfileComplete'];
+    }
+
+    function approvalKeys() {
+      return ['approved', 'isApproved', 'status', 'approvedAt', 'reviewStatus'];
+    }
+
+    function banKeys() {
+      return ['banned', 'isSuspended'];
+    }
+
+    function userChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function ownerUpdate(uid) {
+      return request.auth.uid == uid
+        && resource.data.get('banned', false) != true
+        && (userChanged().hasOnly(ownerKeys())
+            || (resource.data.get('isProfileComplete', false) != true
+                && userChanged().hasOnly(ownerKeys().concat(profileKeys()))))
+        // Mesaj sayacı yalnızca +1 artabilir (FieldValue.increment(1)).
+        && (!userChanged().hasAny(['messageCount'])
+            || request.resource.data.messageCount == resource.data.get('messageCount', 0) + 1);
+    }
+
+    function canTouchTarget() {
+      return isSuperAdmin() || !(roleOf(resource.data) in ['superadmin', 'super-admin']);
+    }
+
+    // Onay: moderatör ve üstü. Ban/askı: yalnızca admin ve superadmin.
+    function staffUpdate() {
+      return isStaff()
+        && canTouchTarget()
+        && (userChanged().hasOnly(approvalKeys())
+            || (isAdmin() && userChanged().hasOnly(approvalKeys().concat(banKeys()))));
+    }
+
+    // Rol değiştirme: yalnızca superadmin.
+    function roleUpdate() {
+      return isSuperAdmin()
+        && userChanged().hasOnly(['role'])
+        && request.resource.data.role in ['superadmin', 'admin', 'moderator', 'support', 'analyst', 'user'];
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(userCreateKeys())
+        && request.resource.data.get('role', 'user') == 'user'
+        && request.resource.data.get('approved', null) == false
+        && request.resource.data.get('isApproved', false) == false
+        && request.resource.data.get('status', 'pending') == 'pending'
+        && request.resource.data.get('banned', false) == false
+        && request.resource.data.get('points', 0) == 0
+        && request.resource.data.get('badges', []).size() == 0
+        && request.resource.data.get('messageCount', 0) == 0;
+
+      allow update: if signedIn() && (ownerUpdate(uid) || staffUpdate() || roleUpdate());
+
+      // Silme: admin ve superadmin. Admin, diğer admin/superadmin hesaplarını silemez.
+      allow delete: if isAdmin()
+        && (isSuperAdmin() || !(roleOf(resource.data) in ['superadmin', 'super-admin', 'admin']));
+
+      match /notifications/{nid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+        // Gönderen kimliği sahtelenemez; yönetim bildirimlerinde senderUid yoktur.
+        allow create: if (isStaff() || activeUser())
+          && request.resource.data.get('senderUid', request.auth.uid) == request.auth.uid;
+        allow update: if signedIn() && (isStaff()
+          || (request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead', 'type'])));
+        allow delete: if signedIn() && (request.auth.uid == uid || isStaff());
+      }
+
+      // Takip: kayıt sahibi ya da takip eden/edilen kendi tarafını yazabilir.
+      match /followers/{other} {
+        allow read: if signedIn();
+        allow write: if activeUser() && (request.auth.uid == uid || request.auth.uid == other);
+      }
+
+      match /following/{other} {
+        allow read: if signedIn();
+        allow write: if activeUser() && (request.auth.uid == uid || request.auth.uid == other);
+      }
+
+      // Saha doğrulama kayıtlarını yalnızca Cloud Functions yazar.
+      match /verifiedEvents/{eid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      }
+    }
+
+    // ---------------------------------------------------------------- groups (etkinlikler)
+    function groupPath(gid) {
+      return /databases/$(database)/documents/groups/$(gid);
+    }
+
+    function isGroupMember(gid) {
+      return request.auth.uid in get(groupPath(gid)).data.get('members', []);
+    }
+
+    // Mobil `_joinCapacity` ile aynı: maxCapacity (web: capacity), 1..30, varsayılan 20.
+    function capOf(d) {
+      let c = d.get('maxCapacity', d.get('capacity', 20));
+      return (c is number && c > 0) ? (c > 30 ? 30 : c) : 20;
+    }
+
+    function groupChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function oldMembers() {
+      return resource.data.get('members', []);
+    }
+
+    function newMembers() {
+      return request.resource.data.get('members', []);
+    }
+
+    // Kendini ekleme: tam 1 kişi artar, kontenjanı aşamaz, memberCount üye sayısına eşit olmalı.
+    function joinOk() {
+      return activeUser()
+        && groupChanged().hasOnly(['members', 'memberCount', 'waitlist', 'leftMembers'])
+        && groupChanged().hasAny(['members'])
+        && newMembers().hasAll(oldMembers())
+        && newMembers().size() == oldMembers().size() + 1
+        && request.auth.uid in newMembers()
+        && !(request.auth.uid in oldMembers())
+        && newMembers().size() <= capOf(resource.data)
+        && request.resource.data.get('memberCount', 0) == newMembers().size()
+        && resource.data.get('isCorporate', false) != true;
+    }
+
+    function leaveOk() {
+      return signedIn()
+        && groupChanged().hasOnly(['members', 'memberCount', 'leftMembers'])
+        && oldMembers().hasAll(newMembers())
+        && newMembers().size() == oldMembers().size() - 1
+        && request.auth.uid in oldMembers()
+        && !(request.auth.uid in newMembers())
+        && request.resource.data.get('memberCount', 0) == newMembers().size();
+    }
+
+    // Etkinlik sahibi (örn. kurumsal başvuru onayı) bir başvurucuyu üyeliğe ekleyebilir.
+    function ownerAddOk() {
+      return activeUser()
+        && resource.data.get('createdBy', '') == request.auth.uid
+        && groupChanged().hasOnly(['members', 'memberCount'])
+        && newMembers().hasAll(oldMembers())
+        && newMembers().size() == oldMembers().size() + 1
+        && newMembers().size() <= capOf(resource.data)
+        && request.resource.data.get('memberCount', 0) == newMembers().size();
+    }
+
+    function softGroupUpdate() {
+      return activeUser()
+        && (
+          // Süresi dolan sohbet her istemci tarafından kapatılabilir; yalnızca "Kapalı" yazılabilir.
+          (groupChanged().hasOnly(['chatStatus']) && request.resource.data.chatStatus == 'Kapalı')
+          // Anket sonucu uygulanırken üyeler tarih/konum güncelleyebilir.
+          || (groupChanged().hasOnly(['eventDate', 'locationAddress']) && request.auth.uid in oldMembers())
+          || groupChanged().hasOnly(['preApprovals'])
+          || groupChanged().hasOnly(['waitlist'])
+        );
+    }
+
+    match /groups/{gid} {
+      allow read: if signedIn();
+
+      allow create: if activeUser()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.memberCount == 1
+        && request.resource.data.get('status', '') == 'Onay Bekliyor'
+        && (request.resource.data.get('isCorporate', false) != true
+            || isStaff()
+            || meData().get('isPartner', false) == true);
+
+      allow update: if signedIn() && (isStaff() || joinOk() || leaveOk() || ownerAddOk() || softGroupUpdate());
+      allow delete: if isStaff();
+
+      match /messages/{mid} {
+        // Mesajları yalnızca onaylı, banlı olmayan grup üyeleri (ve yönetim) okuyabilir/yazabilir.
+        allow read: if activeUser() && (isGroupMember(gid) || isStaff());
+        allow create: if activeUser()
+          && isGroupMember(gid)
+          && (request.resource.data.senderId == request.auth.uid
+              || (request.resource.data.senderId == 'system'
+                  && request.resource.data.get('type', '') in ['system', 'system_event']));
+        allow update: if activeUser() && (isStaff()
+          || (isGroupMember(gid)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'readBy', 'poll'])));
+        allow delete: if isStaff() || (signedIn() && resource.data.get('senderId', '') == request.auth.uid);
+      }
+
+      match /typing/{tid} {
+        allow read: if activeUser() && isGroupMember(gid);
+        allow write: if activeUser() && isGroupMember(gid) && request.auth.uid == tid;
+      }
+
+      match /checklist/{cid} {
+        allow read: if activeUser() && isGroupMember(gid);
+        allow create: if activeUser() && isGroupMember(gid) && request.resource.data.createdBy == request.auth.uid;
+        allow update: if activeUser() && isGroupMember(gid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAssigned', 'assignedUser']);
+        allow delete: if isStaff() || (signedIn() && resource.data.get('createdBy', '') == request.auth.uid);
+      }
+
+      // Check-in QR anahtarı: yalnızca etkinlik sahibi ve yönetim görür; doğrulamayı Cloud Function yapar.
+      match /private/{docId} {
+        allow read, write: if signedIn()
+          && (isStaff() || get(groupPath(gid)).data.get('createdBy', '') == request.auth.uid);
+      }
+    }
+
+    // Check-in ve puan alanlarını istemci yazamaz (yalnızca Cloud Functions).
+    match /group_members/{mid} {
+      allow read: if activeUser();
+      allow create: if activeUser()
+        && mid.matches('.+_' + request.auth.uid)
+        && request.resource.data.keys().hasOnly(['groupId', 'uid', 'isMuted', 'arrivedAnnounced', 'arrivedAt'])
+        && request.resource.data.get('uid', request.auth.uid) == request.auth.uid;
+      allow update: if activeUser()
+        && mid.matches('.+_' + request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['groupId', 'uid', 'isMuted', 'arrivedAnnounced', 'arrivedAt']);
+      allow delete: if isStaff();
+    }
+
+    function requestGroupOwner(d) {
+      return get(groupPath(d.groupId)).data.get('createdBy', '') == request.auth.uid;
+    }
+
+    match /event_requests/{rid} {
+      allow read: if activeUser() && (resource == null
+        || resource.data.get('uid', '') == request.auth.uid
+        || isStaff()
+        || requestGroupOwner(resource.data));
+      allow create: if activeUser()
+        && request.resource.data.uid == request.auth.uid
+        && rid == request.resource.data.groupId + '_' + request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if activeUser() && (isStaff()
+        || requestGroupOwner(resource.data)
+        || (resource.data.get('uid', '') == request.auth.uid
+            && resource.data.get('status', '') == 'rejected'
+            && request.resource.data.status == 'pending'
+            && request.resource.data.uid == request.auth.uid));
+      allow delete: if isStaff();
+    }
+
+    // ---------------------------------------------------------------- sohbet / sosyal
+    match /spontaneous_statuses/{sid} {
+      allow read: if activeUser();
+      allow create, update: if activeUser() && sid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      // Süresi dolmuş kayıtları (purgeExpiredStatuses) herkes temizleyebilir.
+      allow delete: if activeUser()
+        && (sid == request.auth.uid || resource.data.get('expiresAt', request.time) <= request.time);
+    }
+
+    function chatPath(cid) {
+      return /databases/$(database)/documents/chats/$(cid);
+    }
+
+    match /chats/{cid} {
+      allow read: if activeUser() && (resource == null || request.auth.uid in resource.data.members);
+      // Özel sohbet kimliği "uidA_uidB" biçimindedir; üyeler yalnızca bu iki kişi olabilir.
+      allow create: if activeUser()
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.members.size() == 2
+        && request.resource.data.members.hasOnly(cid.split('_'));
+      allow update: if activeUser()
+        && request.auth.uid in resource.data.members
+        && request.resource.data.members == resource.data.members;
+
+      match /messages/{mid} {
+        allow read: if activeUser() && request.auth.uid in get(chatPath(cid)).data.members;
+        // İlk mesaj sohbet belgesiyle aynı işlemde yazılabildiği için getAfter kullanılır.
+        allow create: if activeUser()
+          && request.resource.data.senderId == request.auth.uid
+          && request.auth.uid in getAfter(chatPath(cid)).data.members;
+      }
+    }
+
+    // ---------------------------------------------------------------- moderasyon / içerik
+    match /reports/{rid} {
+      allow read: if isPanel();
+      allow create: if activeUser() && request.resource.data.get('status', 'Bekliyor') == 'Bekliyor';
+      allow update, delete: if isStaff();
+    }
+
+    match /event_photos/{pid} {
+      allow read: if signedIn()
+        && (isStaff()
+            || resource.data.get('status', '') == 'approved'
+            || resource.data.get('uploaderUid', '') == request.auth.uid);
+      allow create: if activeUser()
+        && request.resource.data.uploaderUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if isStaff();
+      allow delete: if isStaff() || (signedIn() && resource.data.get('uploaderUid', '') == request.auth.uid);
+    }
+
+    match /feedback/{fid} {
+      allow read: if isPanel();
+      allow create: if activeUser() && request.resource.data.uid == request.auth.uid;
+      allow update: if isStaff();
+    }
+
+    // Marka etkinliği duyurusu: yönetim ya da iş ortağı (isPartner) hesabı.
+    match /brand_broadcasts/{bid} {
+      allow read: if isStaff() || (activeUser() && meData().get('isPartner', false) == true);
+      allow create, update: if isStaff() || (activeUser() && meData().get('isPartner', false) == true);
+    }
+
+    // Admin panelinden gönderilen duyurular (push'u Cloud Function tetikler).
+    match /notifications/{nid} {
+      allow read: if isPanel();
+      allow create: if isStaff() && request.resource.data.sentBy == request.auth.uid;
+      allow delete: if isStaff();
+    }
+
+    // Denetim kaydı: yalnızca ekleme; geçmiş değiştirilemez/silinemez.
+    match /admin_logs/{lid} {
+      allow read: if isPanel();
+      allow create: if isPanel() && request.resource.data.adminUid == request.auth.uid;
+    }
+
+    match /categories/{cid} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /privacy_requests/{pid} {
+      allow read: if isPanel();
+      allow create, update: if isStaff();
+    }
+
+    match /system/{docId} {
+      allow read: if isPanel();
+      allow write: if isAdmin();
+    }
+
+    match /system_errors/{eid} {
+      allow read: if isPanel();
+      allow create: if signedIn();
+    }
+
+    // Eski `events` koleksiyonu (admin paneli).
+    match /events/{eid} {
+      allow read: if signedIn();
+      allow write: if isStaff();
+
+      match /messages/{mid} {
+        allow read: if signedIn();
+        allow delete: if isStaff();
+      }
+    }
+  }
+}

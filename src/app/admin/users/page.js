@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { collection, deleteDoc, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { canAccessAdminPanel } from "@/lib/adminAuth";
+import { canAccessAdminPanel, canManageUsers, canWriteAdmin, useCurrentAdminRole } from "@/lib/adminAuth";
 import { writeAdminLog } from "@/lib/adminLog";
 import { getEmailVerification, instagramBeyan } from "@/lib/adminDomain";
 import AdminShell, { AdminPager, formatAdminDate, toDate } from "@/components/admin/AdminShell";
@@ -43,6 +43,9 @@ function AdminUsersInner() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
+  const myRole = useCurrentAdminRole();
+  const canApprove = canWriteAdmin(myRole);
+  const canModerate = canManageUsers(myRole);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -112,6 +115,7 @@ function AdminUsersInner() {
   const paged = filtered.slice(current * TABLE_PAGE_SIZE, current * TABLE_PAGE_SIZE + TABLE_PAGE_SIZE);
 
   const approveUser = async (user) => {
+    if (!canApprove) return alert("Hesap onaylama yetkiniz yok.");
     const ig = instagramBeyan(user);
     if (!confirm(`${user.fullName || user.email} hesabını onaylamak istiyor musunuz?\nInstagram beyanı: ${ig.handle || "yok"}`)) return;
     setBusyId(user.id);
@@ -139,6 +143,7 @@ function AdminUsersInner() {
   };
 
   const setSuspended = async (user, next) => {
+    if (!canModerate) return alert("Engelleme yalnızca Admin ve Süper Admin yetkisindedir.");
     const actionLabel = next ? "askıya almak / engellemek" : "engeli kaldırmak";
     if (!confirm(`${user.fullName || user.email} hesabını ${actionLabel} istiyor musunuz?`)) return;
     const reason = next ? window.prompt("İşlem gerekçesi") : "Engel kaldırıldı";
@@ -166,6 +171,7 @@ function AdminUsersInner() {
   };
 
   const deleteBlockReason = (user) => {
+    if (!canModerate) return "Kullanıcı silme yalnızca Admin ve Süper Admin yetkisindedir.";
     if (user.id === auth.currentUser?.uid) return "Kendi hesabını silemezsin.";
     if (canAccessAdminPanel(user.role)) return "Yönetici hesapları silinemez. Önce rolünü kullanıcıya çevir.";
     return "";
@@ -173,7 +179,7 @@ function AdminUsersInner() {
 
   const confirmDeleteUser = async () => {
     const user = deleteTarget;
-    if (!user) return;
+    if (!user || deleteBlockReason(user)) return;
     setDeleting(true);
     try {
       await deleteDoc(doc(db, "users", user.id));
@@ -280,7 +286,7 @@ function AdminUsersInner() {
                       <button type="button" className="is-warn" onClick={() => router.push(`/admin/users/${u.id}`)}>
                         Detay
                       </button>
-                      {pending && (
+                      {pending && canApprove && (
                         <button
                           type="button"
                           className="is-ok"
@@ -293,7 +299,7 @@ function AdminUsersInner() {
                       {suspended ? (
                         <button
                           type="button"
-                          disabled={busyId === u.id}
+                          disabled={busyId === u.id || !canModerate}
                           onClick={() => setSuspended(u, false)}
                         >
                           Aktif Et
@@ -302,7 +308,7 @@ function AdminUsersInner() {
                         <button
                           type="button"
                           className="is-danger"
-                          disabled={busyId === u.id}
+                          disabled={busyId === u.id || !canModerate}
                           onClick={() => setSuspended(u, true)}
                         >
                           Askıya Al / Engelle

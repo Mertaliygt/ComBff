@@ -333,7 +333,18 @@ function DashboardPageContent() {
         });
       });
       setGroups(list);
-    });
+    }, (err) => console.error("Gruplar dinlenemedi:", err));
+
+    return () => unsubscribeGroups();
+  }, []);
+
+  // Moderasyon verileri (şikayet, onay bekleyen kullanıcı/fotoğraf) yalnızca yönetici rolünde dinlenir;
+  // normal kullanıcıya bu koleksiyonlar hiç açılmaz (firestore.rules da reddeder).
+  const moderatorRole = String(userData?.role || "").trim().toLowerCase();
+  const canModerate = moderatorRole === "admin" || moderatorRole === "mod";
+  useEffect(() => {
+    if (!canModerate) return undefined;
+    const onError = (err) => console.error("Moderasyon verisi dinlenemedi:", err);
 
     const unsubscribeReports = onSnapshot(collection(db, "reports"), (snapshot) => {
       const list = [];
@@ -341,7 +352,7 @@ function DashboardPageContent() {
         list.push({ id: docSnap.id, ...docSnap.data() });
       });
       setReports(list);
-    });
+    }, onError);
 
     const unsubscribeUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       const list = [];
@@ -352,7 +363,7 @@ function DashboardPageContent() {
         }
       });
       setPendingUsers(list);
-    });
+    }, onError);
 
     const unsubscribePhotos = onSnapshot(collection(db, "event_photos"), (snapshot) => {
       const list = [];
@@ -362,15 +373,14 @@ function DashboardPageContent() {
         }
       });
       setPendingPhotos(list);
-    });
+    }, onError);
 
     return () => {
-      unsubscribeGroups();
       unsubscribeReports();
       unsubscribeUsers();
       unsubscribePhotos();
     };
-  }, []);
+  }, [canModerate]);
 
   useEffect(() => {
     if (targetGroupId && groups.length > 0) {
@@ -416,7 +426,7 @@ function DashboardPageContent() {
   /* MODERATÖR İŞLEMLERİ */
   const handleApproveUser = async (userId) => {
     try {
-      await updateDoc(doc(db, "users", userId), { approved: true });
+      await updateDoc(doc(db, "users", userId), { approved: true, isApproved: true, status: "active" });
       alert("Kullanıcı onaylandı!");
     } catch (err) {
       alert("Hata: " + err.message);

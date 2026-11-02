@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, updateDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { normalizeRole, roleLabel } from "@/lib/adminAuth";
+import { auth, db } from "@/lib/firebase";
+import { isSuperAdmin, normalizeRole, roleLabel, useCurrentAdminRole } from "@/lib/adminAuth";
 import { writeAdminLog } from "@/lib/adminLog";
 import AdminShell from "@/components/admin/AdminShell";
 
@@ -11,6 +11,8 @@ const ROLES = ["superadmin", "admin", "moderator", "support", "analyst", "user"]
 
 export default function AdminStaffPage() {
   const [users, setUsers] = useState([]);
+  const myRole = useCurrentAdminRole();
+  const canChangeRoles = isSuperAdmin(myRole);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "users"), (snapshot) => {
@@ -23,7 +25,21 @@ export default function AdminStaffPage() {
 
   const staff = users.filter((u) => ["superadmin", "admin", "moderator", "support", "analyst"].includes(normalizeRole(u.role)));
 
+  const superAdminCount = users.filter((u) => normalizeRole(u.role) === "superadmin").length;
+
   const changeRole = async (user, role) => {
+    if (!canChangeRoles) {
+      alert("Rol değiştirme yalnızca Süper Admin yetkisindedir.");
+      return;
+    }
+    if (user.id === auth.currentUser?.uid) {
+      alert("Kendi rolünü değiştiremezsin.");
+      return;
+    }
+    if (normalizeRole(user.role) === "superadmin" && role !== "superadmin" && superAdminCount <= 1) {
+      alert("Son Süper Admin'in rolü değiştirilemez.");
+      return;
+    }
     if (!confirm(`${user.fullName || user.email} rolünü ${roleLabel(role)} yapmak istiyor musunuz?`)) return;
     try {
       await updateDoc(doc(db, "users", user.id), { role });
@@ -44,7 +60,7 @@ export default function AdminStaffPage() {
     <AdminShell active="staff">
       <div className="cloop-admin-panel">
         <h2>Admin Yönetimi</h2>
-        <p>Mevcut `users` koleksiyonundaki yönetici rolleri listelenir. Yeni kullanıcı oluşturulmaz; yalnızca rol atanır.</p>
+        <p>Mevcut `users` koleksiyonundaki yönetici rolleri listelenir. Yeni kullanıcı oluşturulmaz; yalnızca rol atanır. Rol değiştirme yalnızca Süper Admin yetkisindedir.</p>
       </div>
       <div className="cloop-admin-table-wrap" style={{ marginTop: 16 }}>
         <table className="cloop-admin-table">
@@ -67,7 +83,9 @@ export default function AdminStaffPage() {
                 <td>{roleLabel(user.role)}</td>
                 <td>
                   <select
-                    defaultValue={normalizeRole(user.role)}
+                    value={normalizeRole(user.role)}
+                    disabled={!canChangeRoles || user.id === auth.currentUser?.uid}
+                    title={canChangeRoles ? undefined : "Rol değiştirme yalnızca Süper Admin yetkisindedir."}
                     onChange={(e) => changeRole(user, e.target.value)}
                   >
                     {ROLES.map((role) => (
