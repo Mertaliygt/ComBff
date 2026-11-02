@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { Trash2 } from "lucide-react";
+import { collection, deleteDoc, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
+import { canAccessAdminPanel } from "@/lib/adminAuth";
 import { writeAdminLog } from "@/lib/adminLog";
 import { getEmailVerification, instagramBeyan } from "@/lib/adminDomain";
 import AdminShell, { AdminPager, formatAdminDate, toDate } from "@/components/admin/AdminShell";
@@ -38,6 +40,15 @@ function AdminUsersInner() {
   const [fromDate, setFromDate] = useState("");
   const [busyId, setBusyId] = useState("");
   const [page, setPage] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     setQueryText(searchParams.get("q") || "");
@@ -151,6 +162,35 @@ function AdminUsersInner() {
       alert("Durum güncellenemedi: " + err.message);
     } finally {
       setBusyId("");
+    }
+  };
+
+  const deleteBlockReason = (user) => {
+    if (user.id === auth.currentUser?.uid) return "Kendi hesabını silemezsin.";
+    if (canAccessAdminPanel(user.role)) return "Yönetici hesapları silinemez. Önce rolünü kullanıcıya çevir.";
+    return "";
+  };
+
+  const confirmDeleteUser = async () => {
+    const user = deleteTarget;
+    if (!user) return;
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, "users", user.id));
+      await writeAdminLog({
+        action: "user_delete",
+        targetType: "user",
+        targetId: user.id,
+        targetLabel: user.email || user.fullName,
+        before: user.status || (isUserSuspended(user) ? "askıda" : "aktif"),
+        after: "silindi",
+      });
+      setDeleteTarget(null);
+      setToast({ type: "ok", text: `${user.fullName || user.email || "Kullanıcı"} silindi. Etkinlik, mesaj ve giriş kaydı sunucuda temizleniyor.` });
+    } catch (err) {
+      setToast({ type: "error", text: "Kullanıcı silinemedi: " + err.message });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -268,6 +308,16 @@ function AdminUsersInner() {
                           Askıya Al / Engelle
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="is-danger"
+                        disabled={busyId === u.id || Boolean(deleteBlockReason(u))}
+                        title={deleteBlockReason(u) || "Kullanıcıyı kalıcı olarak sil"}
+                        onClick={() => setDeleteTarget(u)}
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                        Kullanıcıyı Sil
+                      </button>
                     </td>
                   </tr>
                 );
@@ -277,6 +327,37 @@ function AdminUsersInner() {
         </table>
         <AdminPager page={current} pages={pages} onPage={setPage} />
       </div>
+
+      {deleteTarget && (
+        <div className="cloop-admin-modal" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="cloop-admin-modal-card" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <h2>Kullanıcıyı sil</h2>
+            <p style={{ margin: 0 }}>
+              <strong>{deleteTarget.fullName || deleteTarget.email || deleteTarget.id}</strong>
+            </p>
+            <p style={{ margin: 0 }}>
+              Bu kullanıcıyı ve tüm verilerini sistemden kalıcı olarak silmek istediğinize emin misiniz?
+            </p>
+            <small>
+              Kurduğu etkinlikler yayından alınır, mesajları ve bildirim kutusu silinir, giriş hesabı kaldırılır. Bu işlem geri alınamaz.
+            </small>
+            <div className="cloop-admin-modal-actions">
+              <button type="button" className="is-warn" disabled={deleting} onClick={() => setDeleteTarget(null)}>
+                Vazgeç
+              </button>
+              <button type="button" className="is-danger" disabled={deleting} onClick={confirmDeleteUser}>
+                {deleting ? "Siliniyor..." : "Evet, kalıcı olarak sil"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className={`cloop-admin-toast is-${toast.type}`} role="status" onClick={() => setToast(null)}>
+          {toast.text}
+        </div>
+      )}
     </AdminShell>
   );
 }

@@ -114,6 +114,19 @@ export function isEventPast(item, now = Date.now()) {
   return ms != null && ms < now;
 }
 
+const ARCHIVED_EVENT_STATUSES = new Set(["Reddedildi", "Yayından Alındı", "İptal", "İptal Edildi"]);
+
+/** Tamamlanmış (tarihi geçmiş) veya iptal/yayından kaldırılmış/reddedilmiş etkinlik. */
+export function isEventArchived(item, now = Date.now()) {
+  return ARCHIVED_EVENT_STATUSES.has(item?.status) || isEventPast(item, now);
+}
+
+/** Aktif, onaylanmış ve süresi dolmamış canlı etkinlik. */
+export function isEventLive(item, now = Date.now()) {
+  if (isEventArchived(item, now)) return false;
+  return !(item?.status === "Onay Bekliyor" || item?.isApproved === false);
+}
+
 export function sortEventsBySchedule(items, now = Date.now()) {
   return [...items].sort((a, b) => {
     const aMs = eventScheduleMs(a);

@@ -81,12 +81,44 @@ export function formatAdminDate(value) {
   return date.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
 }
 
-export function AdminPager({ page, pages, onPage }) {
+function pagerItems(page, pages) {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i);
+  const items = [0];
+  const from = Math.max(1, page - 1);
+  const to = Math.min(pages - 2, page + 1);
+  if (from > 1) items.push("gap-start");
+  for (let i = from; i <= to; i += 1) items.push(i);
+  if (to < pages - 2) items.push("gap-end");
+  items.push(pages - 1);
+  return items;
+}
+
+export function AdminPager({ page, pages, onPage, numbered = false }) {
   if (pages <= 1) return null;
   return (
     <div className="cloop-admin-pager">
       <button type="button" disabled={page <= 0} onClick={() => onPage(page - 1)}>Önceki</button>
-      <span>{page + 1} / {pages}</span>
+      {numbered ? (
+        <span className="cloop-admin-pager-numbers">
+          {pagerItems(page, pages).map((item) =>
+            typeof item === "string" ? (
+              <span key={item}>…</span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                className={item === page ? "is-current" : ""}
+                aria-current={item === page ? "page" : undefined}
+                onClick={() => onPage(item)}
+              >
+                {item + 1}
+              </button>
+            )
+          )}
+        </span>
+      ) : (
+        <span>{page + 1} / {pages}</span>
+      )}
       <button type="button" disabled={page >= pages - 1} onClick={() => onPage(page + 1)}>Sonraki</button>
     </div>
   );

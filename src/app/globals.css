@@ -315,7 +315,12 @@
 }
 .cloop-admin-table button.is-warn, .cloop-admin-modal button.is-warn { background: #3f3f46; }
 .cloop-admin-table button.is-ok { background: #15803d; }
-.cloop-admin-table button.is-danger { background: #be123c; }
+.cloop-admin-table button.is-danger, .cloop-admin-modal button.is-danger { background: #be123c; }
+.cloop-admin-table button svg { vertical-align: -3px; margin-right: 4px; }
+.cloop-admin-toast { position: fixed; right: 20px; bottom: 20px; z-index: 90; max-width: min(380px, calc(100vw - 40px)); padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 700; color: white; box-shadow: 0 8px 24px #00000066; cursor: pointer; }
+.cloop-admin-toast.is-ok { background: #15803d; }
+.cloop-admin-toast.is-error { background: #be123c; }
+.cloop-admin-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .cloop-admin-quote { margin: 0; max-width: 360px; line-height: 1.5; }
 .cloop-admin-form, .cloop-admin-modal-card { display: flex; flex-direction: column; gap: 12px; }
 .cloop-admin-form h2, .cloop-admin-modal-card h2, .cloop-admin-panel h2 { margin: 0 0 4px; }
@@ -369,6 +374,8 @@
 .cloop-admin-table-wrap > .cloop-admin-pager { margin: 0; padding: 12px 14px; border-top: 1px solid var(--cloop-line); }
 .cloop-admin-pager button { min-height: 32px; border: 0; border-radius: 8px; padding: 0 10px; background: #7c3aed2e; color: var(--cloop-ink); font-weight: 700; }
 .cloop-admin-pager button:disabled { opacity: .45; }
+.cloop-admin-pager-numbers { display: flex; align-items: center; gap: 6px; }
+.cloop-admin-pager button.is-current { background: var(--cloop-violet); color: white; }
 .cloop-chart { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
 .cloop-chart-row { display: grid; grid-template-columns: 72px 1fr 32px; gap: 8px; align-items: center; font-size: 12px; }
 .cloop-chart-track { height: 8px; border-radius: 999px; background: #34343f; overflow: hidden; }
