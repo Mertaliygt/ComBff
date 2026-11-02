@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { auth, db } from "@/lib/firebase";
 import { startPresence } from "@/lib/presence";
+import { deleteUserWithCleanup } from "@/lib/userCleanup";
 import { doc, getDoc, updateDoc, collection, onSnapshot, deleteDoc, arrayUnion, query, orderBy, addDoc } from "firebase/firestore";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -436,7 +437,7 @@ function DashboardPageContent() {
   const handleRejectUser = async (userId) => {
     if (!confirm("Kullanıcıyı reddetmek istiyor musunuz?")) return;
     try {
-      await deleteDoc(doc(db, "users", userId));
+      await deleteUserWithCleanup(db, userId);
       alert("Kullanıcı reddedildi.");
     } catch (err) {
       alert("Hata: " + err.message);

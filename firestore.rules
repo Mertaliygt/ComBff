@@ -1,8 +1,9 @@
 rules_version = '2';
 
 // Cloop (ComBFF) Firestore güvenlik kuralları. Mobil (Flutter) ve web (Next.js) aynı projeyi kullanır.
-// Rol/onay/ban/puan gibi alanlar istemciden YAZILAMAZ: onay ve ban moderasyon rolleriyle, rol yalnızca
-// superadmin ile, puan/check-in ise Cloud Functions (Admin SDK) ile değişir.
+// Rol/onay/ban alanları istemciden serbestçe YAZILAMAZ: onay ve ban moderasyon rolleriyle, rol yalnızca
+// superadmin ile değişir. Puan yalnızca check-in/saha doğrulama kanıtıyla (aynı transaction'daki
+// group_members / verifiedEvents kaydı) ve tam +50 olarak artabilir (bkz. awardUpdate). Cloud Functions gerekmez.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -13,6 +14,22 @@ service cloud.firestore {
 
     function userPath(uid) {
       return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function groupPath(gid) {
+      return /databases/$(database)/documents/groups/$(gid);
+    }
+
+    function gmPath(mid) {
+      return /databases/$(database)/documents/group_members/$(mid);
+    }
+
+    function verifiedPath(uid, gid) {
+      return /databases/$(database)/documents/users/$(uid)/verifiedEvents/$(gid);
+    }
+
+    function checkinKeyPath(gid) {
+      return /databases/$(database)/documents/groups/$(gid)/private/checkin;
     }
 
     function hasProfile() {
@@ -129,6 +146,53 @@ service cloud.firestore {
         && request.resource.data.role in ['superadmin', 'admin', 'moderator', 'support', 'analyst', 'user'];
     }
 
+    // ---- Puan / rozet (Cloud Functions olmadan) -------------------------------------------------
+    // `points` serbestçe yazılamaz. Tek yol: tam +50 artış ve aynı transaction içinde yazılan kanıt belgesi.
+    //  - awardKind == 'checkin': group_members/{gid}_{uid} belgesi ilk kez checkedIn=true olur
+    //    (checkedInBy = işlemi yapan; kendi kendine ya da QR bileti okutan üye).
+    //  - awardKind == 'verify' : users/{uid}/verifiedEvents/{gid} ilk kez oluşur (QR anahtarı kuralda doğrulanır).
+    // Aynı etkinlik için ikinci kez puan verilemez (kanıt belgesi bir kez yazılabilir).
+    function awardKeys() {
+      return ['points', 'travelerPoints', 'monthPoints', 'pointsMonth', 'awardKind', 'awardGroupId',
+              'badges', 'earnedBadges'];
+    }
+
+    function checkinAward(uid, gid) {
+      let mid = gid + '_' + uid;
+      return existsAfter(gmPath(mid))
+        && getAfter(gmPath(mid)).data.get('checkedIn', false) == true
+        && getAfter(gmPath(mid)).data.get('checkedInBy', '') == request.auth.uid
+        && !(exists(gmPath(mid)) && get(gmPath(mid)).data.get('checkedIn', false) == true)
+        && !userChanged().hasAny(['badges', 'earnedBadges']);
+    }
+
+    function verifyAward(uid, gid) {
+      return request.auth.uid == uid
+        && existsAfter(verifiedPath(uid, gid))
+        && !exists(verifiedPath(uid, gid))
+        && request.resource.data.get('badges', []).hasAll(resource.data.get('badges', []))
+        && request.resource.data.get('badges', []).size() <= resource.data.get('badges', []).size() + 4
+        && request.resource.data.get('earnedBadges', []).hasAll(resource.data.get('earnedBadges', []))
+        && request.resource.data.get('earnedBadges', []).size() <= resource.data.get('earnedBadges', []).size() + 1;
+    }
+
+    function awardUpdate(uid) {
+      let d = request.resource.data;
+      let gid = d.get('awardGroupId', '');
+      return activeUser()
+        && userChanged().hasOnly(awardKeys())
+        && userChanged().hasAny(['points'])
+        && gid is string
+        && gid.size() > 0
+        && resource.data.get('banned', false) != true
+        && approvedOf(resource.data)
+        && d.points == resource.data.get('points', 0) + 50
+        && d.get('travelerPoints', 0) == resource.data.get('travelerPoints', 0) + 50
+        && (d.get('monthPoints', 0) == resource.data.get('monthPoints', 0) + 50 || d.get('monthPoints', 0) == 50)
+        && ((d.get('awardKind', '') == 'checkin' && checkinAward(uid, gid))
+            || (d.get('awardKind', '') == 'verify' && verifyAward(uid, gid)));
+    }
+
     match /users/{uid} {
       allow read: if signedIn();
 
@@ -144,7 +208,7 @@ service cloud.firestore {
         && request.resource.data.get('badges', []).size() == 0
         && request.resource.data.get('messageCount', 0) == 0;
 
-      allow update: if signedIn() && (ownerUpdate(uid) || staffUpdate() || roleUpdate());
+      allow update: if signedIn() && (ownerUpdate(uid) || staffUpdate() || roleUpdate() || awardUpdate(uid));
 
       // Silme: admin ve superadmin. Admin, diğer admin/superadmin hesaplarını silemez.
       allow delete: if isAdmin()
@@ -163,25 +227,33 @@ service cloud.firestore {
       // Takip: kayıt sahibi ya da takip eden/edilen kendi tarafını yazabilir.
       match /followers/{other} {
         allow read: if signedIn();
-        allow write: if activeUser() && (request.auth.uid == uid || request.auth.uid == other);
+        // Admin, kullanıcı silinirken karşı tarafın yansıma kayıtlarını temizler.
+        allow write: if (activeUser() && (request.auth.uid == uid || request.auth.uid == other)) || isAdmin();
       }
 
       match /following/{other} {
         allow read: if signedIn();
-        allow write: if activeUser() && (request.auth.uid == uid || request.auth.uid == other);
+        allow write: if (activeUser() && (request.auth.uid == uid || request.auth.uid == other)) || isAdmin();
       }
 
-      // Saha doğrulama kayıtlarını yalnızca Cloud Functions yazar.
+      // Saha doğrulama kaydı: yalnızca üye, kurucu olmayan ve QR anahtarını bilen kullanıcı, bir kez yazar.
+      // Anahtar `groups/{gid}/private/checkin` içinde kalır; kural sunucu tarafında karşılaştırır.
       match /verifiedEvents/{eid} {
         allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+        allow create: if activeUser()
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['groupId', 'eventId', 'isVerified', 'badge', 'points', 'key', 'verifiedAt'])
+          && request.resource.data.get('groupId', '') == eid
+          && request.resource.data.get('isVerified', false) == true
+          && request.resource.data.get('points', 0) == 50
+          && uid in get(groupPath(eid)).data.get('members', [])
+          && get(groupPath(eid)).data.get('createdBy', '') != uid
+          && request.resource.data.get('key', '') == get(checkinKeyPath(eid)).data.get('key', null);
+        allow delete: if isAdmin();
       }
     }
 
     // ---------------------------------------------------------------- groups (etkinlikler)
-    function groupPath(gid) {
-      return /databases/$(database)/documents/groups/$(gid);
-    }
-
     function isGroupMember(gid) {
       return request.auth.uid in get(groupPath(gid)).data.get('members', []);
     }
@@ -293,24 +365,63 @@ service cloud.firestore {
         allow delete: if isStaff() || (signedIn() && resource.data.get('createdBy', '') == request.auth.uid);
       }
 
-      // Check-in QR anahtarı: yalnızca etkinlik sahibi ve yönetim görür; doğrulamayı Cloud Function yapar.
+      // Check-in QR anahtarı: yalnızca etkinlik sahibi ve yönetim okur/yazar; katılımcının anahtarı
+      // doğrulaması verifiedEvents kuralında (get ile) sunucu tarafında yapılır.
       match /private/{docId} {
         allow read, write: if signedIn()
           && (isStaff() || get(groupPath(gid)).data.get('createdBy', '') == request.auth.uid);
       }
     }
 
-    // Check-in ve puan alanlarını istemci yazamaz (yalnızca Cloud Functions).
+    // Üyelik kaydı. Check-in / doğrulama alanları yalnızca ilgili kanıt koşullarıyla yazılabilir.
+    // `keys`: create'te belgenin tüm alanları, update'te değişen alanlar.
+    function gmBaseKeys() {
+      return ['groupId', 'eventId', 'uid', 'isMuted', 'arrivedAnnounced', 'arrivedAt'];
+    }
+
+    function gmBaseOk(mid, keys) {
+      return activeUser()
+        && mid.matches('.+_' + request.auth.uid)
+        && keys.hasOnly(gmBaseKeys())
+        && request.resource.data.get('uid', request.auth.uid) == request.auth.uid;
+    }
+
+    // Check-in: kendi kaydı ya da (QR bilet okutma) başka üyenin kaydı. Bir kez true olabilir;
+    // iki taraf da etkinliğin üyesi olmalı; okutulan kayıt isScanned=true taşır.
+    function gmCheckIn(mid, keys) {
+      let d = request.resource.data;
+      let gid = d.get('groupId', '');
+      let tgt = d.get('uid', '');
+      return activeUser()
+        && keys.hasOnly(gmBaseKeys().concat(['checkedIn', 'checkedInAt', 'checkedInBy', 'isScanned', 'status']))
+        && mid == gid + '_' + tgt
+        && d.get('checkedIn', false) == true
+        && d.get('checkedInBy', '') == request.auth.uid
+        && !(resource != null && resource.data.get('checkedIn', false) == true)
+        && request.auth.uid in get(groupPath(gid)).data.get('members', [])
+        && tgt in get(groupPath(gid)).data.get('members', [])
+        && (tgt == request.auth.uid || d.get('isScanned', false) == true);
+    }
+
+    // Saha doğrulaması: yalnızca kendi kaydı ve verifiedEvents kanıtıyla aynı işlemde.
+    function gmVerify(mid, keys) {
+      let d = request.resource.data;
+      return activeUser()
+        && keys.hasOnly(gmBaseKeys().concat(['isVerified', 'verifiedAt']))
+        && mid == d.get('groupId', '') + '_' + request.auth.uid
+        && d.get('uid', '') == request.auth.uid
+        && d.get('isVerified', false) == true
+        && existsAfter(verifiedPath(request.auth.uid, d.get('groupId', '')));
+    }
+
     match /group_members/{mid} {
       allow read: if activeUser();
-      allow create: if activeUser()
-        && mid.matches('.+_' + request.auth.uid)
-        && request.resource.data.keys().hasOnly(['groupId', 'uid', 'isMuted', 'arrivedAnnounced', 'arrivedAt'])
-        && request.resource.data.get('uid', request.auth.uid) == request.auth.uid;
-      allow update: if activeUser()
-        && mid.matches('.+_' + request.auth.uid)
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['groupId', 'uid', 'isMuted', 'arrivedAnnounced', 'arrivedAt']);
+      allow create: if gmBaseOk(mid, request.resource.data.keys())
+        || gmCheckIn(mid, request.resource.data.keys())
+        || gmVerify(mid, request.resource.data.keys());
+      allow update: if gmBaseOk(mid, request.resource.data.diff(resource.data).affectedKeys())
+        || gmCheckIn(mid, request.resource.data.diff(resource.data).affectedKeys())
+        || gmVerify(mid, request.resource.data.diff(resource.data).affectedKeys());
       allow delete: if isStaff();
     }
 
@@ -343,6 +454,8 @@ service cloud.firestore {
       // Süresi dolmuş kayıtları (purgeExpiredStatuses) herkes temizleyebilir.
       allow delete: if activeUser()
         && (sid == request.auth.uid || resource.data.get('expiresAt', request.time) <= request.time);
+      // Kullanıcı silinirken yönetim anlık durumunu temizler.
+      allow delete: if isStaff();
     }
 
     function chatPath(cid) {
@@ -350,7 +463,8 @@ service cloud.firestore {
     }
 
     match /chats/{cid} {
-      allow read: if activeUser() && (resource == null || request.auth.uid in resource.data.members);
+      // Admin okuması yalnızca kullanıcı silme temizliği içindir (sohbetleri bulmak için).
+      allow read: if activeUser() && (resource == null || request.auth.uid in resource.data.members || isAdmin());
       // Özel sohbet kimliği "uidA_uidB" biçimindedir; üyeler yalnızca bu iki kişi olabilir.
       allow create: if activeUser()
         && request.auth.uid in request.resource.data.members
@@ -359,9 +473,12 @@ service cloud.firestore {
       allow update: if activeUser()
         && request.auth.uid in resource.data.members
         && request.resource.data.members == resource.data.members;
+      // Kullanıcı silinirken admin özel sohbetleri temizler.
+      allow delete: if isAdmin();
 
       match /messages/{mid} {
-        allow read: if activeUser() && request.auth.uid in get(chatPath(cid)).data.members;
+        allow delete: if isAdmin();
+        allow read: if activeUser() && (request.auth.uid in get(chatPath(cid)).data.members || isAdmin());
         // İlk mesaj sohbet belgesiyle aynı işlemde yazılabildiği için getAfter kullanılır.
         allow create: if activeUser()
           && request.resource.data.senderId == request.auth.uid
@@ -400,7 +517,7 @@ service cloud.firestore {
       allow create, update: if isStaff() || (activeUser() && meData().get('isPartner', false) == true);
     }
 
-    // Admin panelinden gönderilen duyurular (push'u Cloud Function tetikler).
+    // Admin panelinden gönderilen duyurular (FCM push'u functions/index.js içindeki sendAdminAnnouncementPush gönderir).
     match /notifications/{nid} {
       allow read: if isPanel();
       allow create: if isStaff() && request.resource.data.sentBy == request.auth.uid;

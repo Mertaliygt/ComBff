@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { collection, deleteDoc, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { canAccessAdminPanel, canManageUsers, canWriteAdmin, useCurrentAdminRole } from "@/lib/adminAuth";
 import { writeAdminLog } from "@/lib/adminLog";
+import { deleteUserWithCleanup } from "@/lib/userCleanup";
 import { getEmailVerification, instagramBeyan } from "@/lib/adminDomain";
 import AdminShell, { AdminPager, formatAdminDate, toDate } from "@/components/admin/AdminShell";
 
@@ -182,7 +183,7 @@ function AdminUsersInner() {
     if (!user || deleteBlockReason(user)) return;
     setDeleting(true);
     try {
-      await deleteDoc(doc(db, "users", user.id));
+      await deleteUserWithCleanup(db, user.id);
       await writeAdminLog({
         action: "user_delete",
         targetType: "user",
@@ -192,7 +193,7 @@ function AdminUsersInner() {
         after: "silindi",
       });
       setDeleteTarget(null);
-      setToast({ type: "ok", text: `${user.fullName || user.email || "Kullanıcı"} silindi. Etkinlik, mesaj ve giriş kaydı sunucuda temizleniyor.` });
+      setToast({ type: "ok", text: `${user.fullName || user.email || "Kullanıcı"} silindi; üyelik, başvuru, mesaj ve ilişkili veriler temizlendi. Giriş (Auth) hesabı Firebase Console'dan ayrıca silinmelidir.` });
     } catch (err) {
       setToast({ type: "error", text: "Kullanıcı silinemedi: " + err.message });
     } finally {
